@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Generali -->
+    <string name="app_name">LingoLocal</string>
+    <string name="welcome_message">Benvenuto su LingoLocal</string>
+    <string name="loading">Caricamento...</string>
+    <string name="error">Errore</string>
+
+    <!-- Home -->
+    <string name="manage_models">Gestione Modelli AI</string>
+
+    <!-- Model Manager -->
+    <string name="download_ready">Nessun modello scaricato. Scarica un modello per iniziare.</string>
+    <string name="download_model">Scarica Modello</string>
+    <string name="download_progress">Download in corso: %1$d%</string>
+    <string name="download_complete">Download completato con successo!</string>
+    <string name="download_error">Errore nel download: %1$s</string>
+    <string name="model_already_available">Modello già disponibile in locale.</string>
+</resources>
