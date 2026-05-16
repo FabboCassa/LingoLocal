@@ -6,7 +6,7 @@ import org.lingolocal.project.data.platform.FileStorage
 
 /**
  * Modulo Koin specifico per Android.
- * Fornisce le implementazioni platform-specific (es. FileStorage con Context).
+ * Fornisce le implementazioni platform-specific che richiedono Context Android.
  */
 val androidModule = module {
     single<FileStorage> { AndroidFileStorage(get()) }

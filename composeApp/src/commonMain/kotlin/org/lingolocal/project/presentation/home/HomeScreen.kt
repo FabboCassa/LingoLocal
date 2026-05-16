@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,21 +13,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
 import lingolocal.composeapp.generated.resources.Res
+import lingolocal.composeapp.generated.resources.home_subtitle
 import lingolocal.composeapp.generated.resources.loading
-import lingolocal.composeapp.generated.resources.manage_models
 import org.jetbrains.compose.resources.stringResource
-import org.lingolocal.project.presentation.modelmanager.ModelManagerScreen
 
 /**
- * Schermata Home (View layer).
- * Mostra il messaggio di benvenuto e un pulsante per navigare
- * alla gestione dei modelli AI.
+ * Dashboard principale.
+ * In questa fase mostra solo il messaggio di benvenuto.
+ * I quick-action verranno aggiunti nelle fasi successive (piano studio, sessioni, statistiche).
  */
 class HomeScreen : Screen {
 
@@ -36,22 +33,14 @@ class HomeScreen : Screen {
     override fun Content() {
         val screenModel = getScreenModel<HomeScreenModel>()
         val uiState by screenModel.uiState.collectAsState()
-        val navigator = LocalNavigator.currentOrThrow
-
-        HomeContent(
-            uiState = uiState,
-            onManageModelsClick = { navigator.push(ModelManagerScreen()) }
-        )
+        HomeContent(uiState)
     }
 }
 
 @Composable
-private fun HomeContent(
-    uiState: HomeUiState,
-    onManageModelsClick: () -> Unit
-) {
+private fun HomeContent(uiState: HomeUiState) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         if (uiState.isLoading) {
@@ -68,17 +57,20 @@ private fun HomeContent(
         } else {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     text = uiState.welcomeMessage,
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
                 )
-                Button(onClick = onManageModelsClick) {
-                    Text(stringResource(Res.string.manage_models))
-                }
+                Text(
+                    text = stringResource(Res.string.home_subtitle),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

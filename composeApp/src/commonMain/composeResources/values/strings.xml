@@ -6,8 +6,24 @@
     <string name="loading">Caricamento...</string>
     <string name="error">Errore</string>
 
+    <!-- Bottom navigation -->
+    <string name="tab_home">Home</string>
+    <string name="tab_models">Modelli</string>
+    <string name="tab_settings">Impostazioni</string>
+
     <!-- Home -->
     <string name="manage_models">Gestione Modelli AI</string>
+    <string name="home_subtitle">Il tuo tutor di lingua, 100%% offline.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Impostazioni</string>
+    <string name="settings_theme_section">Aspetto</string>
+    <string name="settings_theme_label">Tema</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Chiaro</string>
+    <string name="settings_theme_dark">Scuro</string>
+    <string name="settings_dev_section">Sviluppo</string>
+    <string name="settings_open_llama_test">Test inferenza LLM</string>
 
     <!-- Model Manager -->
     <string name="download_ready">Nessun modello scaricato. Scarica un modello per iniziare.</string>
@@ -16,4 +32,20 @@
     <string name="download_complete">Download completato con successo!</string>
     <string name="download_error">Errore nel download: %1$s</string>
     <string name="model_already_available">Modello già disponibile in locale.</string>
+
+    <!-- Llama Inference Test -->
+    <string name="llama_test_title">Test Inferenza LLM</string>
+    <string name="llama_test_open">Test Inferenza</string>
+    <string name="llama_model_path_hint">Percorso file .gguf</string>
+    <string name="llama_prompt_hint">Prompt da inviare al modello</string>
+    <string name="llama_load_button">Carica Modello</string>
+    <string name="llama_unload_button">Scarica Modello</string>
+    <string name="llama_generate_button">Genera</string>
+    <string name="llama_status_idle">Engine pronto. Carica un modello GGUF per iniziare.</string>
+    <string name="llama_status_initializing">Inizializzazione backend nativo...</string>
+    <string name="llama_status_loading">Caricamento modello in memoria...</string>
+    <string name="llama_status_loaded">Modello caricato. Inserisci un prompt e premi Genera.</string>
+    <string name="llama_status_generating">Generazione in corso...</string>
+    <string name="llama_status_error">Errore: %1$s</string>
+    <string name="llama_status_load_failed">Caricamento modello fallito. Controlla path e log.</string>
 </resources>

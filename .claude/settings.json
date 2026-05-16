@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git submodule *)",
+      "Bash(ls \"C:/Users/Fabbo/AppData/Local/Android/Sdk/ndk/\")",
+      "Bash(ls \"C:/Users/Fabbo/AppData/Local/Android/Sdk/cmake/\")",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid --no-daemon)",
+      "Bash(./gradlew :composeApp:assembleDebug --no-daemon)",
+      "PowerShell(& \"C:\\\\Users\\\\Fabbo\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices)",
+      "PowerShell(& \"C:\\\\Users\\\\Fabbo\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" install -r \"C:\\\\Users\\\\Fabbo\\\\LingoLocal\\\\composeApp\\\\build\\\\outputs\\\\apk\\\\debug\\\\composeApp-debug.apk\")",
+      "PowerShell(& \"C:\\\\Users\\\\Fabbo\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 3C201FDJG00548 install -r \"C:\\\\Users\\\\Fabbo\\\\LingoLocal\\\\composeApp\\\\build\\\\outputs\\\\apk\\\\debug\\\\composeApp-debug.apk\")",
+      "PowerShell([System.IO.DriveInfo]::GetDrives\\(\\) | Select-Object Name, DriveType, IsReady)",
+      "PowerShell(& \"C:\\\\Users\\\\Fabbo\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 3C201FDJG00548 push \"E:\\\\Download\\\\qwen2.5-0.5b-instruct-q4_k_m.gguf\" /sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid)",
+      "Bash(./gradlew :composeApp:assembleDebug)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Fabbo\\.gemini\\antigravity\\brain\\c8ce9908-3904-4adf-9001-a081f7f23240"
+    ]
+  }
+}
