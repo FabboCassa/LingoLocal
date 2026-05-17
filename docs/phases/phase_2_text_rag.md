@@ -28,7 +28,7 @@ Implementare il database locale per i dati strutturati (es. sistema di ripetizio
   - Implementare `searchSimilar(queryEmbedding, topK)` che carica i vettori, calcola la similarity in-memory e restituisce i top-K chunk.
   - *Test:* Inserire 10 chunk fittizi con vettori casuali, eseguire una query e verificare che i top-3 risultati abbiano similarity decrescente.
 
-- [ ] **Task 2.3: Text Chunking e Generazione Embeddings**
+- [x] **Task 2.3: Text Chunking e Generazione Embeddings**
   - Implementare `TextChunkingUseCase`: suddivisione di testi in chunk da ~200–300 token, rispettando confini di frase (split su `.`, `!`, `?`, `\n`).
   - Esporre `llama_get_embeddings()` nel bridge JNI/CInterop esistente (aggiunta minimale a `LlamaEngine`).
   - Implementare `GenerateEmbeddingUseCase` che richiede l'embedding di un testo al modello on-device tramite `LlamaEngine`.

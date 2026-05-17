@@ -24,4 +24,6 @@ class LlamaRepositoryImpl(
         engine.generate(prompt, maxTokens)
 
     override suspend fun unloadModel() = engine.unloadModel()
+
+    override suspend fun embed(text: String): FloatArray? = engine.embed(text)
 }

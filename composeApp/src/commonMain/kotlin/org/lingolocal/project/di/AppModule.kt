@@ -2,7 +2,6 @@ package org.lingolocal.project.di
 
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
-import kotlinx.datetime.Clock
 import org.koin.dsl.module
 import org.lingolocal.project.data.db.DatabaseDriverFactory
 import org.lingolocal.project.data.db.LingoDatabase
@@ -29,7 +28,10 @@ import org.lingolocal.project.domain.usecase.CreateDeckUseCase
 import org.lingolocal.project.domain.usecase.CreateFlashcardUseCase
 import org.lingolocal.project.domain.usecase.DeleteFlashcardUseCase
 import org.lingolocal.project.domain.usecase.DownloadModelUseCase
+import org.lingolocal.project.domain.usecase.GenerateEmbeddingUseCase
 import org.lingolocal.project.domain.usecase.GenerateTextUseCase
+import org.lingolocal.project.domain.usecase.IndexTextUseCase
+import org.lingolocal.project.domain.usecase.TextChunkingUseCase
 import org.lingolocal.project.domain.usecase.GetThemeModeUseCase
 import org.lingolocal.project.domain.usecase.GetWelcomeMessageUseCase
 import org.lingolocal.project.domain.usecase.InitializeLlamaUseCase
@@ -52,9 +54,6 @@ import org.lingolocal.project.presentation.settings.SettingsScreenModel
 val appModule = module {
     // Persistence (multiplatform-settings-no-arg auto-resolve per piattaforma)
     single<Settings> { Settings() }
-
-    // Clock (testabile)
-    single<Clock> { Clock.System }
 
     // Networking
     single { HttpClient() }
@@ -81,6 +80,9 @@ val appModule = module {
     factory { InitializeLlamaUseCase(get()) }
     factory { LoadLlamaModelUseCase(get()) }
     factory { GenerateTextUseCase(get()) }
+    factory { GenerateEmbeddingUseCase(get()) }
+    factory { TextChunkingUseCase() }
+    factory { IndexTextUseCase(get(), get(), get()) }
     factory { GetThemeModeUseCase(get()) }
     factory { SetThemeModeUseCase(get()) }
     factory { CreateDeckUseCase(get()) }

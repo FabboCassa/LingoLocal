@@ -21,6 +21,13 @@ internal class LlamaEngineAndroid {
      */
     external fun nativeNextToken(): String?
 
+    /**
+     * Genera l'embedding pooled (MEAN) del testo fornito riusando lo stesso
+     * modello caricato. Restituisce un FloatArray L2-normalizzato di lunghezza
+     * `n_embd`, oppure null se il modello non è caricato o la decode fallisce.
+     */
+    external fun nativeEmbed(text: String): FloatArray?
+
     companion object {
         @Volatile
         private var loaded: Boolean = false

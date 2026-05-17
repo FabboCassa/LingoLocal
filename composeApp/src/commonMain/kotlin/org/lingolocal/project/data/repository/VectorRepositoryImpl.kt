@@ -2,7 +2,7 @@ package org.lingolocal.project.data.repository
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import org.lingolocal.project.data.db.EmbeddingCodec
 import org.lingolocal.project.data.db.LingoDatabase
 import org.lingolocal.project.data.db.Text_chunks
@@ -32,7 +32,7 @@ class VectorRepositoryImpl(
         sourceId: String,
         content: String,
         embedding: FloatArray
-    ): Long = withContext(Dispatchers.IO) {
+    ): Long = withContext(Dispatchers.Default) {
         require(embedding.isNotEmpty()) { "embedding non può essere vuoto" }
         db.transactionWithResult {
             queries.insertTextChunk(
@@ -45,18 +45,18 @@ class VectorRepositoryImpl(
         }
     }
 
-    override suspend fun getAllChunks(): List<TextChunk> = withContext(Dispatchers.IO) {
+    override suspend fun getAllChunks(): List<TextChunk> = withContext(Dispatchers.Default) {
         queries.selectAllTextChunks().executeAsList().map { it.toDomain() }
     }
 
     override suspend fun deleteBySourceId(sourceId: String) {
-        withContext(Dispatchers.IO) { queries.deleteTextChunksBySource(sourceId) }
+        withContext(Dispatchers.Default) { queries.deleteTextChunksBySource(sourceId) }
     }
 
     override suspend fun searchSimilar(
         queryEmbedding: FloatArray,
         topK: Int
-    ): List<ScoredChunk> = withContext(Dispatchers.IO) {
+    ): List<ScoredChunk> = withContext(Dispatchers.Default) {
         require(topK > 0) { "topK deve essere > 0" }
         require(queryEmbedding.isNotEmpty()) { "queryEmbedding non può essere vuoto" }
 

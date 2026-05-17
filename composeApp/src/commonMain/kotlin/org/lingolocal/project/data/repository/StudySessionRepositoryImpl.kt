@@ -13,7 +13,7 @@ class StudySessionRepositoryImpl(
 
     private val queries get() = db.schemaQueries
 
-    override suspend fun startSession(deckId: Long?, startedAt: Long): Long = withContext(Dispatchers.IO) {
+    override suspend fun startSession(deckId: Long?, startedAt: Long): Long = withContext(Dispatchers.Default) {
         db.transactionWithResult {
             queries.insertStudySession(deck_id = deckId, started_at = startedAt)
             queries.lastInsertedId().executeAsOne()
@@ -21,7 +21,7 @@ class StudySessionRepositoryImpl(
     }
 
     override suspend fun closeSession(id: Long, endedAt: Long, cardsReviewed: Int, cardsCorrect: Int) {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             queries.closeStudySession(
                 ended_at = endedAt,
                 cards_reviewed = cardsReviewed.toLong(),
@@ -31,7 +31,7 @@ class StudySessionRepositoryImpl(
         }
     }
 
-    override suspend fun recentSessions(limit: Long): List<StudySession> = withContext(Dispatchers.IO) {
+    override suspend fun recentSessions(limit: Long): List<StudySession> = withContext(Dispatchers.Default) {
         queries.selectRecentSessions(limit).executeAsList().map { it.toDomain() }
     }
 }

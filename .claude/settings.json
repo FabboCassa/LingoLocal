@@ -19,7 +19,14 @@
       "Bash(./gradlew :composeApp:generateCommonMainLingoDatabaseInterface --no-daemon)",
       "Bash(./gradlew :composeApp:compileKotlinAndroid --no-daemon)",
       "Bash(./gradlew :composeApp:compileDebugUnitTestKotlinAndroid --no-daemon)",
-      "Bash(./gradlew :composeApp:testDebugUnitTest --tests \"org.lingolocal.project.data.repository.VectorRepositoryTest\" --no-daemon)"
+      "Bash(./gradlew :composeApp:testDebugUnitTest --tests \"org.lingolocal.project.data.repository.VectorRepositoryTest\" --no-daemon)",
+      "Bash(./gradlew :composeApp:testDebugUnitTest --tests \"org.lingolocal.project.domain.usecase.*\" --console=plain)",
+      "Bash(./gradlew :composeApp:externalNativeBuildDebug --console=plain)",
+      "Bash(./gradlew :composeApp:assembleDebug --console=plain)",
+      "Bash(./gradlew :composeApp:compileKotlinIosArm64 --console=plain)",
+      "Bash(./gradlew :composeApp:assembleDebug :composeApp:testDebugUnitTest --console=plain)",
+      "Bash(./gradlew :composeApp:compileKotlinIosArm64)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinIosArm64 --console=plain)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Fabbo\\.gemini\\antigravity\\brain\\c8ce9908-3904-4adf-9001-a081f7f23240"

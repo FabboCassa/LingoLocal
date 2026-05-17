@@ -94,6 +94,28 @@ actual class LlamaEngine actual constructor() : KoinComponent {
 
     actual fun isModelLoaded(): Boolean = modelLoaded
 
+    actual suspend fun embed(text: String): FloatArray? = mutex.withLock {
+        if (!modelLoaded) {
+            logError(TAG, "embed called without a loaded model", IllegalStateException())
+            return@withLock null
+        }
+        if (text.isBlank()) {
+            logError(TAG, "embed called with blank text", IllegalArgumentException())
+            return@withLock null
+        }
+        withContext(Dispatchers.Default) {
+            try {
+                val v = native.nativeEmbed(text)
+                if (v == null) logError(TAG, "nativeEmbed returned null", null)
+                else logDebug(TAG, "embed ok (dim=${v.size}, len=${text.length})")
+                v
+            } catch (t: Throwable) {
+                logError(TAG, "nativeEmbed threw", t)
+                null
+            }
+        }
+    }
+
     private companion object {
         private const val TAG = "LlamaEngine"
     }

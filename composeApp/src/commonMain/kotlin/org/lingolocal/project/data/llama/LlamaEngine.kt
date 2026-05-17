@@ -53,4 +53,16 @@ expect class LlamaEngine() {
      * Indica se un modello è attualmente caricato in memoria.
      */
     fun isModelLoaded(): Boolean
+
+    /**
+     * Genera l'embedding del testo fornito usando lo stesso modello GGUF
+     * caricato (pooling MEAN, vettore L2-normalizzato).
+     *
+     * Pensato per il flusso RAG (Task 2.3/2.4): un chunk → un vettore denso
+     * di dimensione `n_embd` del modello attivo.
+     *
+     * @return FloatArray con l'embedding o null se nessun modello è caricato
+     *         o se l'inferenza interna fallisce.
+     */
+    suspend fun embed(text: String): FloatArray?
 }

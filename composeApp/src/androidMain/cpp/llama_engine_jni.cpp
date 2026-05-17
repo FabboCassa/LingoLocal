@@ -1,5 +1,6 @@
 #include <android/log.h>
 #include <jni.h>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -18,11 +19,16 @@
 // ---------------------------------------------------------------------------
 // Global engine state
 // Single model + context per process (sufficient for Task 1.4 validation).
+// Task 2.3: aggiunto contesto dedicato per embedding (pooling MEAN) creato
+// lazy al primo nativeEmbed; condivide lo stesso `g_model` per non duplicare
+// i pesi in memoria.
 // ---------------------------------------------------------------------------
 static llama_model                 * g_model          = nullptr;
 static llama_context               * g_ctx            = nullptr;
+static llama_context               * g_ctx_embed      = nullptr;
 static common_sampler              * g_sampler        = nullptr;
 static llama_batch                   g_batch          = {};
+static llama_batch                   g_batch_embed    = {};
 static common_chat_templates_ptr     g_chat_templates = nullptr;
 
 static int   g_n_ctx    = 2048;
@@ -100,6 +106,8 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeLoadModel(
         LOGw("Model already loaded — releasing first");
         if (g_sampler) { common_sampler_free(g_sampler); g_sampler = nullptr; }
         if (g_batch.token != nullptr) { llama_batch_free(g_batch); g_batch = {}; }
+        if (g_batch_embed.token != nullptr) { llama_batch_free(g_batch_embed); g_batch_embed = {}; }
+        if (g_ctx_embed) { llama_free(g_ctx_embed); g_ctx_embed = nullptr; }
         if (g_ctx)   { llama_free(g_ctx); g_ctx = nullptr; }
         if (g_model) { llama_model_free(g_model); g_model = nullptr; }
     }
@@ -163,11 +171,13 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeFreeModel(
         JNIEnv * /*env*/, jobject /*thiz*/) {
-    if (g_sampler)        { common_sampler_free(g_sampler); g_sampler = nullptr; }
-    if (g_batch.token)    { llama_batch_free(g_batch); g_batch = {}; }
+    if (g_sampler)         { common_sampler_free(g_sampler); g_sampler = nullptr; }
+    if (g_batch.token)     { llama_batch_free(g_batch); g_batch = {}; }
+    if (g_batch_embed.token) { llama_batch_free(g_batch_embed); g_batch_embed = {}; }
     g_chat_templates.reset();
-    if (g_ctx)            { llama_free(g_ctx); g_ctx = nullptr; }
-    if (g_model)          { llama_model_free(g_model); g_model = nullptr; }
+    if (g_ctx_embed)       { llama_free(g_ctx_embed); g_ctx_embed = nullptr; }
+    if (g_ctx)             { llama_free(g_ctx); g_ctx = nullptr; }
+    if (g_model)           { llama_model_free(g_model); g_model = nullptr; }
     g_cur_pos = 0;
     g_remaining = 0;
     g_cached_chars.clear();
@@ -276,5 +286,129 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeNextToken(
     } else {
         result = env->NewStringUTF("");
     }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// JNI: embedding (Task 2.3)
+// ---------------------------------------------------------------------------
+// Crea (lazy) un contesto dedicato con embeddings=true e pooling MEAN sullo
+// stesso `g_model` già caricato. Tokenizza l'input, esegue una decode singola
+// e copia il vettore prodotto da `llama_get_embeddings_seq(ctx, 0)` in un
+// jfloatArray. Restituisce null in caso di errore (modello non caricato,
+// prompt che eccede la context window, decode fallita).
+// L'embedding viene normalizzato L2 prima del ritorno: questo allinea il
+// comportamento alla cosine similarity calcolata in Kotlin (vedi
+// CosineSimilarity.kt) senza richiedere modifiche al lato consumer.
+// ---------------------------------------------------------------------------
+static bool ensure_embed_context() {
+    if (g_ctx_embed) return true;
+    if (!g_model) {
+        LOGe("ensure_embed_context: model not loaded");
+        return false;
+    }
+
+    llama_context_params cparams = llama_context_default_params();
+    cparams.embeddings       = true;
+    cparams.pooling_type     = LLAMA_POOLING_TYPE_MEAN;
+    cparams.n_ctx            = 512;   // chunk <= ~300 token + slack
+    cparams.n_batch          = 512;
+    cparams.n_ubatch         = 512;
+    cparams.n_threads        = g_n_threads;
+    cparams.n_threads_batch  = g_n_threads;
+
+    g_ctx_embed = llama_init_from_model(g_model, cparams);
+    if (!g_ctx_embed) {
+        LOGe("llama_init_from_model (embed) returned null");
+        return false;
+    }
+
+    g_batch_embed = llama_batch_init(512, 0, 1);
+    LOGi("Embed context ready (n_embd=%d)", llama_model_n_embd(g_model));
+    return true;
+}
+
+extern "C"
+JNIEXPORT jfloatArray JNICALL
+Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeEmbed(
+        JNIEnv * env, jobject /*thiz*/, jstring jText) {
+    if (!g_model) {
+        LOGe("nativeEmbed: model not loaded");
+        return nullptr;
+    }
+    if (!ensure_embed_context()) {
+        return nullptr;
+    }
+
+    const char * c_text = env->GetStringUTFChars(jText, nullptr);
+    std::string text(c_text);
+    env->ReleaseStringUTFChars(jText, c_text);
+
+    if (text.empty()) {
+        LOGw("nativeEmbed: empty input");
+        return nullptr;
+    }
+
+    std::vector<llama_token> tokens =
+        common_tokenize(g_ctx_embed, text, /*add_special=*/true, /*parse_special=*/false);
+    if (tokens.empty()) {
+        LOGe("nativeEmbed: tokenization produced 0 tokens");
+        return nullptr;
+    }
+
+    const int n_ctx_embed = (int) llama_n_ctx(g_ctx_embed);
+    if ((int) tokens.size() > n_ctx_embed) {
+        LOGw("nativeEmbed: prompt %d > embed ctx %d, truncating",
+             (int) tokens.size(), n_ctx_embed);
+        tokens.resize(n_ctx_embed);
+    }
+
+    // Reset cache/sequence prima di una nuova embedding (sequenze indipendenti).
+    llama_memory_clear(llama_get_memory(g_ctx_embed), true);
+
+    common_batch_clear(g_batch_embed);
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        common_batch_add(g_batch_embed, tokens[i], (llama_pos) i, {0}, /*logits=*/true);
+    }
+
+    if (llama_decode(g_ctx_embed, g_batch_embed) != 0) {
+        LOGe("nativeEmbed: llama_decode failed");
+        return nullptr;
+    }
+
+    const int n_embd = llama_model_n_embd(g_model);
+    if (n_embd <= 0) {
+        LOGe("nativeEmbed: invalid n_embd=%d", n_embd);
+        return nullptr;
+    }
+
+    const float * embd = llama_get_embeddings_seq(g_ctx_embed, 0);
+    if (!embd) {
+        // Fallback per modelli senza pooled output: media manuale sui token.
+        embd = llama_get_embeddings(g_ctx_embed);
+        if (!embd) {
+            LOGe("nativeEmbed: llama_get_embeddings* returned null");
+            return nullptr;
+        }
+    }
+
+    // Copia + normalizzazione L2.
+    std::vector<float> out(n_embd);
+    double norm_sq = 0.0;
+    for (int i = 0; i < n_embd; ++i) {
+        out[i] = embd[i];
+        norm_sq += (double) embd[i] * (double) embd[i];
+    }
+    if (norm_sq > 0.0) {
+        const float inv_norm = (float) (1.0 / std::sqrt(norm_sq));
+        for (int i = 0; i < n_embd; ++i) out[i] *= inv_norm;
+    }
+
+    jfloatArray result = env->NewFloatArray(n_embd);
+    if (!result) {
+        LOGe("nativeEmbed: NewFloatArray failed");
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, n_embd, out.data());
     return result;
 }

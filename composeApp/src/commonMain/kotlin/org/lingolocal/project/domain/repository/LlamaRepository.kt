@@ -25,4 +25,10 @@ interface LlamaRepository {
 
     /** Libera il modello dalla memoria. */
     suspend fun unloadModel()
+
+    /**
+     * Calcola l'embedding pooled del testo (FloatArray L2-normalizzato).
+     * Restituisce null se il modello non è caricato o la generazione fallisce.
+     */
+    suspend fun embed(text: String): FloatArray?
 }

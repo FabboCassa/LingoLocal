@@ -32,4 +32,6 @@ actual class LlamaEngine actual constructor() {
     }
 
     actual fun isModelLoaded(): Boolean = loaded
+
+    actual suspend fun embed(text: String): FloatArray? = null
 }

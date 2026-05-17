@@ -6,7 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import org.lingolocal.project.data.db.LingoDatabase
 import org.lingolocal.project.data.db.toDomain
 import org.lingolocal.project.domain.model.Flashcard
@@ -25,10 +25,10 @@ class FlashcardRepositoryImpl(
     override fun observeByDeck(deckId: Long): Flow<List<Flashcard>> =
         queries.selectFlashcardsByDeck(deckId)
             .asFlow()
-            .mapToList(Dispatchers.IO)
+            .mapToList(Dispatchers.Default)
             .map { rows -> rows.map { it.toDomain() } }
 
-    override suspend fun create(deckId: Long, front: String, back: String): Long = withContext(Dispatchers.IO) {
+    override suspend fun create(deckId: Long, front: String, back: String): Long = withContext(Dispatchers.Default) {
         db.transactionWithResult {
             val now = nowMillis()
             queries.insertFlashcard(
@@ -42,16 +42,16 @@ class FlashcardRepositoryImpl(
         }
     }
 
-    override suspend fun getById(id: Long): Flashcard? = withContext(Dispatchers.IO) {
+    override suspend fun getById(id: Long): Flashcard? = withContext(Dispatchers.Default) {
         queries.selectFlashcardById(id).executeAsOneOrNull()?.toDomain()
     }
 
     override suspend fun updateContent(id: Long, front: String, back: String) {
-        withContext(Dispatchers.IO) { queries.updateFlashcard(front = front, back = back, id = id) }
+        withContext(Dispatchers.Default) { queries.updateFlashcard(front = front, back = back, id = id) }
     }
 
     override suspend fun updateSrsState(id: Long, srs: SrsState) {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             queries.updateFlashcardSrs(
                 ease_factor = srs.easeFactor,
                 interval_days = srs.intervalDays.toLong(),
@@ -63,14 +63,14 @@ class FlashcardRepositoryImpl(
     }
 
     override suspend fun delete(id: Long) {
-        withContext(Dispatchers.IO) { queries.deleteFlashcard(id) }
+        withContext(Dispatchers.Default) { queries.deleteFlashcard(id) }
     }
 
-    override suspend fun countByDeck(deckId: Long): Long = withContext(Dispatchers.IO) {
+    override suspend fun countByDeck(deckId: Long): Long = withContext(Dispatchers.Default) {
         queries.countFlashcards(deckId).executeAsOne()
     }
 
-    override suspend fun getDueCards(now: Long, limit: Long): List<Flashcard> = withContext(Dispatchers.IO) {
+    override suspend fun getDueCards(now: Long, limit: Long): List<Flashcard> = withContext(Dispatchers.Default) {
         queries.selectDueFlashcards(now = now, max_count = limit)
             .executeAsList()
             .map { it.toDomain() }
