@@ -12,7 +12,14 @@
       "PowerShell([System.IO.DriveInfo]::GetDrives\\(\\) | Select-Object Name, DriveType, IsReady)",
       "PowerShell(& \"C:\\\\Users\\\\Fabbo\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s 3C201FDJG00548 push \"E:\\\\Download\\\\qwen2.5-0.5b-instruct-q4_k_m.gguf\" /sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf)",
       "Bash(./gradlew :composeApp:compileDebugKotlinAndroid)",
-      "Bash(./gradlew :composeApp:assembleDebug)"
+      "Bash(./gradlew :composeApp:assembleDebug)",
+      "Bash(./gradlew :composeApp:generateCommonMainLingoDatabaseInterface --console=plain)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid --console=plain)",
+      "Bash(./gradlew :composeApp:testDebugUnitTest --tests \"org.lingolocal.project.data.repository.FlashcardCrudTest\" --console=plain)",
+      "Bash(./gradlew :composeApp:generateCommonMainLingoDatabaseInterface --no-daemon)",
+      "Bash(./gradlew :composeApp:compileKotlinAndroid --no-daemon)",
+      "Bash(./gradlew :composeApp:compileDebugUnitTestKotlinAndroid --no-daemon)",
+      "Bash(./gradlew :composeApp:testDebugUnitTest --tests \"org.lingolocal.project.data.repository.VectorRepositoryTest\" --no-daemon)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Fabbo\\.gemini\\antigravity\\brain\\c8ce9908-3904-4adf-9001-a081f7f23240"

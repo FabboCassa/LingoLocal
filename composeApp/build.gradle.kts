@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.sqldelight)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -30,6 +32,10 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.sqldelight.android.driver)
+        }
+        iosMain.dependencies {
+            implementation(libs.sqldelight.native.driver)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -61,9 +67,30 @@ kotlin {
             // Settings persistence (theme, preferences)
             implementation(libs.multiplatformSettings.noArg)
             implementation(libs.multiplatformSettings.coroutines)
+
+            // SQLDelight (structured + vector storage)
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
+            implementation(libs.sqldelight.primitiveAdapters)
+
+            // JSON serialization (RAG / LLM output decoding)
+            implementation(libs.kotlinx.serialization.json)
+
+            // Time / clock abstraction
+            implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+        }
+        val androidUnitTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlin.testJunit)
+                implementation(libs.junit)
+                implementation(libs.kotlinx.coroutines.test)
+                // SQLDelight in-memory driver per test CRUD su JVM
+                implementation(libs.sqldelight.sqlite.driver)
+            }
         }
     }
 }
@@ -121,5 +148,13 @@ android {
 
 dependencies {
     debugImplementation(libs.compose.uiTooling)
+}
+
+sqldelight {
+    databases {
+        create("LingoDatabase") {
+            packageName.set("org.lingolocal.project.data.db")
+        }
+    }
 }
 

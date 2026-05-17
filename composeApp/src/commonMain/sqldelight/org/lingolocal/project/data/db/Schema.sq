@@ -1,0 +1,144 @@
+-- ===========================================================================
+-- LingoLocal SQLDelight schema
+-- ---------------------------------------------------------------------------
+-- Tabelle:
+--   decks            -> mazzi di flashcard                       (Task 2.1)
+--   flashcards       -> singola card con stato SRS (SM-2)        (Task 2.1)
+--   study_sessions   -> sessione di studio (storico/analytics)   (Task 2.1)
+--   text_chunks      -> chunk di testo + embedding (BLOB) RAG    (Task 2.2)
+--
+-- NOTA: quiz_results sarà aggiunto nel task 2.5.
+-- ===========================================================================
+
+CREATE TABLE decks (
+    id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    language      TEXT    NOT NULL,
+    created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE flashcards (
+    id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    deck_id         INTEGER NOT NULL,
+    front           TEXT    NOT NULL,
+    back            TEXT    NOT NULL,
+    created_at      INTEGER NOT NULL,
+    -- SRS (SM-2 semplificato)
+    ease_factor     REAL    NOT NULL DEFAULT 2.5,
+    interval_days   INTEGER NOT NULL DEFAULT 0,
+    repetitions     INTEGER NOT NULL DEFAULT 0,
+    next_review_at  INTEGER NOT NULL,
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX flashcards_deck_idx ON flashcards(deck_id);
+CREATE INDEX flashcards_review_idx ON flashcards(next_review_at);
+
+CREATE TABLE study_sessions (
+    id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    deck_id         INTEGER,
+    started_at      INTEGER NOT NULL,
+    ended_at        INTEGER,
+    cards_reviewed  INTEGER NOT NULL DEFAULT 0,
+    cards_correct   INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE SET NULL
+);
+
+-- ===========================================================================
+-- Decks
+-- ===========================================================================
+insertDeck:
+INSERT INTO decks(name, language, created_at) VALUES (?, ?, ?);
+
+lastInsertedId:
+SELECT last_insert_rowid();
+
+selectAllDecks:
+SELECT * FROM decks ORDER BY created_at DESC;
+
+selectDeckById:
+SELECT * FROM decks WHERE id = ?;
+
+deleteDeck:
+DELETE FROM decks WHERE id = ?;
+
+-- ===========================================================================
+-- Flashcards (CRUD + SRS)
+-- ===========================================================================
+insertFlashcard:
+INSERT INTO flashcards(deck_id, front, back, created_at, next_review_at)
+VALUES (?, ?, ?, ?, ?);
+
+selectFlashcardsByDeck:
+SELECT * FROM flashcards WHERE deck_id = ? ORDER BY created_at;
+
+selectFlashcardById:
+SELECT * FROM flashcards WHERE id = ?;
+
+selectDueFlashcards:
+SELECT * FROM flashcards WHERE next_review_at <= :now ORDER BY next_review_at LIMIT :max_count;
+
+updateFlashcard:
+UPDATE flashcards SET front = ?, back = ? WHERE id = ?;
+
+updateFlashcardSrs:
+UPDATE flashcards
+SET ease_factor = ?, interval_days = ?, repetitions = ?, next_review_at = ?
+WHERE id = ?;
+
+deleteFlashcard:
+DELETE FROM flashcards WHERE id = ?;
+
+countFlashcards:
+SELECT COUNT(*) FROM flashcards WHERE deck_id = ?;
+
+-- ===========================================================================
+-- Study sessions
+-- ===========================================================================
+insertStudySession:
+INSERT INTO study_sessions(deck_id, started_at) VALUES (?, ?);
+
+closeStudySession:
+UPDATE study_sessions
+SET ended_at = ?, cards_reviewed = ?, cards_correct = ?
+WHERE id = ?;
+
+selectRecentSessions:
+SELECT * FROM study_sessions ORDER BY started_at DESC LIMIT ?;
+
+-- ===========================================================================
+-- Vector storage (Task 2.2)
+-- ---------------------------------------------------------------------------
+-- Gli embedding sono memorizzati come BLOB (FloatArray serializzato little-endian).
+-- La similarità coseno viene calcolata in-memory in Kotlin: per dataset
+-- personali (≤ qualche migliaio di chunk) è più che sufficiente, ed evita
+-- l'aggiunta di estensioni native (sqlite-vec) non disponibili su tutte le
+-- piattaforme KMP.
+-- source_id identifica la sorgente d'origine (es. id documento/testo importato);
+-- consente la cancellazione bulk quando l'utente rimuove un materiale.
+-- ===========================================================================
+CREATE TABLE text_chunks (
+    id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    source_id   TEXT    NOT NULL,
+    content     TEXT    NOT NULL,
+    embedding   BLOB    NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX text_chunks_source_idx ON text_chunks(source_id);
+
+insertTextChunk:
+INSERT INTO text_chunks(source_id, content, embedding, created_at)
+VALUES (?, ?, ?, ?);
+
+selectAllTextChunks:
+SELECT * FROM text_chunks;
+
+selectTextChunksBySource:
+SELECT * FROM text_chunks WHERE source_id = ? ORDER BY id;
+
+deleteTextChunksBySource:
+DELETE FROM text_chunks WHERE source_id = ?;
+
+countTextChunks:
+SELECT COUNT(*) FROM text_chunks;

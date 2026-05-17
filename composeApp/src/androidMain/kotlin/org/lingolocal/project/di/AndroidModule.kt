@@ -1,6 +1,7 @@
 package org.lingolocal.project.di
 
 import org.koin.dsl.module
+import org.lingolocal.project.data.db.DatabaseDriverFactory
 import org.lingolocal.project.data.platform.AndroidFileStorage
 import org.lingolocal.project.data.platform.FileStorage
 
@@ -10,4 +11,5 @@ import org.lingolocal.project.data.platform.FileStorage
  */
 val androidModule = module {
     single<FileStorage> { AndroidFileStorage(get()) }
+    single { DatabaseDriverFactory(get()) }
 }
