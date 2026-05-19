@@ -20,8 +20,8 @@ class LlamaRepositoryImpl(
 
     override fun isReady(): Boolean = engine.isModelLoaded()
 
-    override fun generate(prompt: String, maxTokens: Int): Flow<String> =
-        engine.generate(prompt, maxTokens)
+    override fun generate(prompt: String, imageBytes: ByteArray?, maxTokens: Int): Flow<String> =
+        engine.generate(prompt, imageBytes, maxTokens)
 
     override suspend fun unloadModel() = engine.unloadModel()
 

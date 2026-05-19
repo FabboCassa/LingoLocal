@@ -30,6 +30,7 @@ import lingolocal.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.lingolocal.project.domain.model.QuizResult
 import org.lingolocal.project.presentation.textmanager.TextRAGScreen
+import org.lingolocal.project.presentation.vision.VisionAcquisitionScreen
 
 /**
  * Dashboard principale di LingoLocal.
@@ -46,6 +47,7 @@ class HomeScreen : Screen {
         HomeContent(
             uiState = uiState,
             onNavigateToRag = { navigator.push(TextRAGScreen()) },
+            onNavigateToVision = { navigator.push(VisionAcquisitionScreen()) },
             formatTime = screenModel::formatTimeAgo
         )
     }
@@ -55,6 +57,7 @@ class HomeScreen : Screen {
 private fun HomeContent(
     uiState: HomeUiState,
     onNavigateToRag: () -> Unit,
+    onNavigateToVision: () -> Unit,
     formatTime: (Long) -> String
 ) {
     Box(
@@ -160,7 +163,7 @@ private fun HomeContent(
                                         .padding(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
                                     Text(
-                                        text = "Inizia Ora",
+                                        text = stringResource(Res.string.home_start_now),
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onPrimary,
                                         style = MaterialTheme.typography.labelLarge
@@ -169,6 +172,69 @@ private fun HomeContent(
                                         imageVector = LingoIcons.PlayArrow,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Premium Card per modulo Vision Acquisizione Visiva
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable(onClick = onNavigateToVision),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF8E24AA), // Premium Violet
+                                            Color(0xFF00ACC1)  // Premium Cyan
+                                        )
+                                    )
+                                )
+                                .padding(24.dp)
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.vision_acq_home_title),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = stringResource(Res.string.vision_acq_home_subtitle),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.2f))
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(Res.string.home_scan_now),
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Icon(
+                                        imageVector = LingoIcons.Camera,
+                                        contentDescription = null,
+                                        tint = Color.White
                                     )
                                 }
                             }

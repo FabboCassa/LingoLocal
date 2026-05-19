@@ -14,6 +14,7 @@ internal class LlamaEngineAndroid {
     external fun nativeFreeModel()
 
     external fun nativeBeginCompletion(prompt: String, nPredict: Int): Boolean
+    external fun nativeBeginCompletionWithVision(prompt: String, imageBytes: ByteArray, nPredict: Int): Boolean
 
     /**
      * Restituisce il prossimo frammento di testo generato, o null quando

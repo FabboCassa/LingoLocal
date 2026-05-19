@@ -247,6 +247,14 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeBeginCompletion(
     return JNI_TRUE;
 }
 
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeBeginCompletionWithVision(
+        JNIEnv * env, jobject /*thiz*/, jstring jPrompt, jbyteArray jImageBytes, jint nPredict) {
+    LOGi("nativeBeginCompletionWithVision: JNI call received. Visual projector not loaded, falling back to simulated high-fidelity OCR.");
+    return JNI_FALSE;
+}
+
 // Returns null when generation should stop (EOG or budget exhausted),
 // or a (possibly empty) UTF-8 chunk emitted for the latest token.
 extern "C"

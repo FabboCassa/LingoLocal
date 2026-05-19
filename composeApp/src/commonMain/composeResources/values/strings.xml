@@ -100,4 +100,56 @@
     <string name="home_quiz_history_title">Storico dei tuoi Quiz</string>
     <string name="home_no_quiz_history">Non hai ancora svolto nessun quiz. Inizia indicizzando un testo!</string>
     <string name="quiz_history_item_score">%1$d/%2$d risposte esatte</string>
+
+    <!-- Vision Acquisition UI -->
+    <string name="vision_acq_title">Acquisizione Visiva AI</string>
+    <string name="vision_acq_desc">Scatta una foto o importa un documento per estrarre testo, traduzione e creare flashcard locali istantaneamente, 100% offline.</string>
+    <string name="vision_acq_document_type">Tipologia Documento:</string>
+    <string name="vision_acq_type_receipt">Ricevuta / Scontrino</string>
+    <string name="vision_acq_type_grammar">Pagina di Grammatica</string>
+    <string name="vision_acq_type_general">Generale / Altro</string>
+    <string name="vision_acq_start_analysis">Analizza con LingoLocal AI</string>
+    <string name="vision_acq_tab_text">Testo &amp; Traduzione</string>
+    <string name="vision_acq_tab_vocab">Vocabolario Chiave</string>
+    <string name="vision_acq_tab_details">Dettagli Strutturati</string>
+    <string name="vision_acq_original_text">Testo Estratto</string>
+    <string name="vision_acq_translated_text">Traduzione</string>
+    <string name="vision_acq_grammar_rules">Regole Grammaticali</string>
+    <string name="vision_acq_entities">Entità Estratte</string>
+    <string name="vision_acq_save_flashcard">Salva Flashcard</string>
+    <string name="vision_acq_saved">Salvato!</string>
+    <string name="vision_acq_scan_hint">Inquadra il testo e scatta o seleziona una sorgente per l\'elaborazione offline.</string>
+    <string name="vision_acq_select_deck">Mazzo Flashcard di destinazione:</string>
+    <string name="vision_acq_home_title">Studio Multimodale: Fotocamera</string>
+    <string name="vision_acq_home_subtitle">Scatta una foto, estrai testi, traduzioni e vocaboli chiave per generare flashcard locali offline.</string>
+
+    <!-- Vision Extra Localized Strings -->
+    <string name="vision_acq_compressing_image">Compressione immagine...</string>
+    <string name="vision_acq_file_original">File originale: %1$s</string>
+    <string name="vision_acq_file_optimized">File ottimizzato: %1$s</string>
+    <string name="vision_acq_camera">Fotocamera</string>
+    <string name="vision_acq_gallery">Galleria</string>
+    <string name="vision_acq_scan_another_doc">Scansiona un altro documento</string>
+    <string name="vision_acq_processing_local_ai">Elaborazione Locale AI</string>
+    <string name="vision_acq_waiting_for_data">In attesa di dati...</string>
+    <string name="vision_acq_do_not_turn_off">Non spegnere il dispositivo ed attendi il completamento offline.</string>
+    <string name="vision_acq_no_vocab_extracted">Nessun vocabolo chiave estratto per questo tipo di documento.</string>
+    <string name="vision_acq_argument">Argomento:</string>
+    <string name="vision_acq_no_extra_data">Nessun dato strutturato aggiuntivo per questo documento.</string>
+    <string name="vision_acq_err_image_optimization">Errore durante l\'ottimizzazione dell\'immagine: %1$s</string>
+    <string name="vision_acq_err_no_image">Nessuna immagine da analizzare.</string>
+    <string name="vision_acq_step_init_engine">Inizializzazione motore di visione locale...</string>
+    <string name="vision_acq_step_pixel_sampling">Pre-processamento e campionamento dei pixel...</string>
+    <string name="vision_acq_step_inference">Esecuzione inferenza AI e OCR on-device...</string>
+    <string name="vision_acq_step_decoding">Decodifica del formato JSON strutturato...</string>
+    <string name="vision_acq_err_local_inference">Errore durante l\'inferenza del modello locale: %1$s\nVerifica che il modello supporti l\'input multimodale.</string>
+    <string name="vision_acq_default_deck">Acquisizione Visiva</string>
+    <string name="vision_acq_err_save_flashcard">Errore nel salvataggio della flashcard: %1$s</string>
+    <string name="vision_acq_err_unexpected">Errore imprevisto: %1$s</string>
+    <string name="home_start_now">Inizia Ora</string>
+    <string name="home_scan_now">Scansiona Ora</string>
+    <string name="common_back">Indietro</string>
+    <string name="common_preview">Anteprima</string>
+    <string name="common_save">Salva</string>
+    <string name="vision_acq_default_deck_label">Mazzo Predefinito</string>
 </resources>

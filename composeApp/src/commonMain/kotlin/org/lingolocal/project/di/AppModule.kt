@@ -53,6 +53,8 @@ import org.lingolocal.project.domain.usecase.GetQuizResultsUseCase
 import org.lingolocal.project.presentation.textmanager.TextRAGScreenModel
 import org.lingolocal.project.presentation.textmanager.QuizScreenModel
 import org.lingolocal.project.presentation.visiontest.VisionTestScreenModel
+import org.lingolocal.project.domain.usecase.PreprocessImageUseCase
+import org.lingolocal.project.presentation.vision.VisionAcquisitionScreenModel
 
 /**
  * Modulo Koin principale dell'applicazione.
@@ -105,6 +107,7 @@ val appModule = module {
     factory { DeleteFlashcardUseCase(get()) }
     factory { SaveQuizResultUseCase(get()) }
     factory { GetQuizResultsUseCase(get()) }
+    factory { PreprocessImageUseCase() }
 
     // Presentation layer
     factory { HomeScreenModel(get(), get(), get()) }
@@ -113,5 +116,6 @@ val appModule = module {
     factory { SettingsScreenModel(get(), get()) }
     factory { TextRAGScreenModel(get(), get(), get(), get(), get()) }
     factory { QuizScreenModel(get()) }
-    factory { VisionTestScreenModel() }
+    factory { VisionTestScreenModel(get()) }
+    factory { VisionAcquisitionScreenModel(get(), get(), get(), get(), get()) }
 }

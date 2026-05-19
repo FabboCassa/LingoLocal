@@ -21,7 +21,7 @@ interface LlamaRepository {
      * Avvia una generazione di testo. Emette frammenti UTF-8 in streaming;
      * il Flow termina quando il modello emette EOG o si esaurisce [maxTokens].
      */
-    fun generate(prompt: String, maxTokens: Int = 256): Flow<String>
+    fun generate(prompt: String, imageBytes: ByteArray? = null, maxTokens: Int = 256): Flow<String>
 
     /** Libera il modello dalla memoria. */
     suspend fun unloadModel()

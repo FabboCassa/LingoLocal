@@ -45,7 +45,7 @@ class GenerateQuizUseCase(
             try {
                 logInfo(TAG, "Tentativo di generazione quiz: $attempt di $maxRetries")
                 
-                val rawResponse = llamaRepository.generate(prompt, maxTokens)
+                val rawResponse = llamaRepository.generate(prompt, maxTokens = maxTokens)
                     .fold("") { acc, piece -> acc + piece }
                 
                 logDebug(TAG, "Risposta grezza LLM: $rawResponse")

@@ -39,9 +39,10 @@ expect class LlamaEngine() {
      * quando viene raggiunto [maxTokens].
      *
      * @param prompt testo di input completo (chat-template già applicato se necessario)
+     * @param imageBytes array opzionale di byte dell'immagine per compiti multimodali (Task 3.3)
      * @param maxTokens numero massimo di token da generare
      */
-    fun generate(prompt: String, maxTokens: Int = 256): Flow<String>
+    fun generate(prompt: String, imageBytes: ByteArray? = null, maxTokens: Int = 256): Flow<String>
 
     /**
      * Libera modello, contesto, sampler e batch. L'engine può essere

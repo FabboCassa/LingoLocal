@@ -11,5 +11,5 @@ class GenerateTextUseCase(
     private val repository: LlamaRepository
 ) {
     operator fun invoke(prompt: String, maxTokens: Int = 256): Flow<String> =
-        repository.generate(prompt, maxTokens)
+        repository.generate(prompt = prompt, maxTokens = maxTokens)
 }
