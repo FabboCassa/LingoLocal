@@ -48,4 +48,48 @@
     <string name="llama_status_generating">Generazione in corso...</string>
     <string name="llama_status_error">Errore: %1$s</string>
     <string name="llama_status_load_failed">Caricamento modello fallito. Controlla path e log.</string>
+    <!-- Text Management & RAG -->
+    <string name="text_rag_title">Gestione Testi e Quiz RAG</string>
+    <string name="text_rag_subtitle">Aggiungi testi, indicizzali nel Vector DB e genera quiz personalizzati con RAG offline.</string>
+    <string name="add_text_section">Carica Nuovo Materiale</string>
+    <string name="text_title_hint">Titolo del documento (es. Dialogo Vacanze)</string>
+    <string name="text_content_hint">Incolla qui il testo in lingua straniera da studiare...</string>
+    <string name="index_text_button">Indicizza nel Vector DB</string>
+    <string name="indexing_in_progress">Indicizzazione e generazione embedding in corso...</string>
+    
+    <string name="indexed_materials_section">Materiali Didattici Indicizzati</string>
+    <string name="no_indexed_materials">Nessun testo indicizzato nello store. Aggiungine uno sopra!</string>
+    <string name="chunks_count">%1$d frammenti</string>
+    
+    <string name="quiz_generator_section">Generatore Quiz Personalizzato</string>
+    <string name="topic_query_hint">Argomento del quiz (opzionale, es. verbi irregolari)</string>
+    <string name="num_questions_label">Numero di domande:</string>
+    <string name="focus_label">Focus Didattico:</string>
+    <string name="focus_general">Generico / Bilanciato</string>
+    <string name="focus_grammar">Grammatica e Regole</string>
+    <string name="focus_vocabulary">Vocabolario e Parole</string>
+    <string name="focus_examples">Esempi e Contesti reali</string>
+    
+    <string name="generate_quiz_button">Genera Quiz con RAG</string>
+    <string name="generating_quiz_progress">Il modello locale sta analizzando il contesto e creando le domande...</string>
+    <string name="llm_not_ready_warning">Attenzione: Carica prima il modello LLM locale offline nella sezione Modelli per abilitare la generazione dei quiz.</string>
+
+    <!-- Quiz Game Screen -->
+    <string name="quiz_question_progress">Domanda %1$d di %2$d</string>
+    <string name="correct_answer">Corretto! Bravissimo!</string>
+    <string name="incorrect_answer">Errato. Riprova nel prossimo quiz!</string>
+    <string name="explanation_label">Spiegazione didattica:</string>
+    <string name="validate_answer_button">Verifica Risposta</string>
+    <string name="next_question_button">Avanti</string>
+    
+    <!-- Quiz Results Screen -->
+    <string name="quiz_results_title">Risultato del Quiz!</string>
+    <string name="quiz_score_label">Punteggio ottenuto:</string>
+    <string name="back_to_home_button">Salva e torna alla Home</string>
+    <string name="saving_result">Salvataggio del punteggio...</string>
+    
+    <!-- Home Screen Additions -->
+    <string name="home_quiz_history_title">Storico dei tuoi Quiz</string>
+    <string name="home_no_quiz_history">Non hai ancora svolto nessun quiz. Inizia indicizzando un testo!</string>
+    <string name="quiz_history_item_score">%1$d/%2$d risposte esatte</string>
 </resources>

@@ -142,3 +142,22 @@ DELETE FROM text_chunks WHERE source_id = ?;
 
 countTextChunks:
 SELECT COUNT(*) FROM text_chunks;
+
+-- ===========================================================================
+-- Quiz Results (Task 2.5)
+-- ===========================================================================
+CREATE TABLE quiz_results (
+    id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    title           TEXT    NOT NULL,
+    questions_count INTEGER NOT NULL,
+    correct_answers INTEGER NOT NULL,
+    created_at      INTEGER NOT NULL
+);
+
+insertQuizResult:
+INSERT INTO quiz_results(title, questions_count, correct_answers, created_at)
+VALUES (?, ?, ?, ?);
+
+selectAllQuizResults:
+SELECT * FROM quiz_results ORDER BY created_at DESC;
+

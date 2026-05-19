@@ -32,6 +32,8 @@ import org.lingolocal.project.domain.usecase.GenerateEmbeddingUseCase
 import org.lingolocal.project.domain.usecase.GenerateTextUseCase
 import org.lingolocal.project.domain.usecase.IndexTextUseCase
 import org.lingolocal.project.domain.usecase.TextChunkingUseCase
+import org.lingolocal.project.domain.usecase.RagQueryUseCase
+import org.lingolocal.project.domain.usecase.GenerateQuizUseCase
 import org.lingolocal.project.domain.usecase.GetThemeModeUseCase
 import org.lingolocal.project.domain.usecase.GetWelcomeMessageUseCase
 import org.lingolocal.project.domain.usecase.InitializeLlamaUseCase
@@ -44,6 +46,12 @@ import org.lingolocal.project.presentation.home.HomeScreenModel
 import org.lingolocal.project.presentation.llamatest.LlamaTestScreenModel
 import org.lingolocal.project.presentation.modelmanager.ModelManagerScreenModel
 import org.lingolocal.project.presentation.settings.SettingsScreenModel
+import org.lingolocal.project.data.repository.QuizRepositoryImpl
+import org.lingolocal.project.domain.repository.QuizRepository
+import org.lingolocal.project.domain.usecase.SaveQuizResultUseCase
+import org.lingolocal.project.domain.usecase.GetQuizResultsUseCase
+import org.lingolocal.project.presentation.textmanager.TextRAGScreenModel
+import org.lingolocal.project.presentation.textmanager.QuizScreenModel
 
 /**
  * Modulo Koin principale dell'applicazione.
@@ -69,6 +77,7 @@ val appModule = module {
     single<FlashcardRepository> { FlashcardRepositoryImpl(get(), get()) }
     single<StudySessionRepository> { StudySessionRepositoryImpl(get()) }
     single<VectorRepository> { VectorRepositoryImpl(get(), get()) }
+    single<QuizRepository> { QuizRepositoryImpl(get(), get()) }
     // LlamaEngine ha actual cross-platform (Android JNI, iOS stub) con costruttore no-args
     single { LlamaEngine() }
     single<LlamaRepository> { LlamaRepositoryImpl(get()) }
@@ -83,6 +92,8 @@ val appModule = module {
     factory { GenerateEmbeddingUseCase(get()) }
     factory { TextChunkingUseCase() }
     factory { IndexTextUseCase(get(), get(), get()) }
+    factory { RagQueryUseCase(get(), get()) }
+    factory { GenerateQuizUseCase(get()) }
     factory { GetThemeModeUseCase(get()) }
     factory { SetThemeModeUseCase(get()) }
     factory { CreateDeckUseCase(get()) }
@@ -91,10 +102,14 @@ val appModule = module {
     factory { ObserveFlashcardsUseCase(get()) }
     factory { UpdateFlashcardUseCase(get()) }
     factory { DeleteFlashcardUseCase(get()) }
+    factory { SaveQuizResultUseCase(get()) }
+    factory { GetQuizResultsUseCase(get()) }
 
     // Presentation layer
-    factory { HomeScreenModel(get()) }
+    factory { HomeScreenModel(get(), get(), get()) }
     factory { ModelManagerScreenModel(get(), get()) }
     factory { LlamaTestScreenModel(get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
+    factory { TextRAGScreenModel(get(), get(), get(), get(), get()) }
+    factory { QuizScreenModel(get()) }
 }
