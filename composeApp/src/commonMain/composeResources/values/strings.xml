@@ -24,6 +24,14 @@
     <string name="settings_theme_dark">Scuro</string>
     <string name="settings_dev_section">Sviluppo</string>
     <string name="settings_open_llama_test">Test inferenza LLM</string>
+    <string name="settings_open_vision_test">Test Acquisizione Visiva</string>
+    <string name="vision_test_title">Test Acquisizione Visiva</string>
+    <string name="vision_test_desc">Verifica la selezione dell'immagine tramite Galleria o Fotocamera native del dispositivo.</string>
+    <string name="vision_test_camera_btn">Fotocamera</string>
+    <string name="vision_test_gallery_btn">Galleria</string>
+    <string name="vision_test_no_image">Nessuna immagine acquisita. Seleziona una sorgente sopra.</string>
+    <string name="vision_test_image_loaded">Immagine caricata in memoria con successo!</string>
+    <string name="vision_test_size_label">Dimensione file:</string>
 
     <!-- Model Manager -->
     <string name="download_ready">Nessun modello scaricato. Scarica un modello per iniziare.</string>

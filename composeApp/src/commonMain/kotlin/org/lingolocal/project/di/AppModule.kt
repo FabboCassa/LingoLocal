@@ -52,6 +52,7 @@ import org.lingolocal.project.domain.usecase.SaveQuizResultUseCase
 import org.lingolocal.project.domain.usecase.GetQuizResultsUseCase
 import org.lingolocal.project.presentation.textmanager.TextRAGScreenModel
 import org.lingolocal.project.presentation.textmanager.QuizScreenModel
+import org.lingolocal.project.presentation.visiontest.VisionTestScreenModel
 
 /**
  * Modulo Koin principale dell'applicazione.
@@ -112,4 +113,5 @@ val appModule = module {
     factory { SettingsScreenModel(get(), get()) }
     factory { TextRAGScreenModel(get(), get(), get(), get(), get()) }
     factory { QuizScreenModel(get()) }
+    factory { VisionTestScreenModel() }
 }

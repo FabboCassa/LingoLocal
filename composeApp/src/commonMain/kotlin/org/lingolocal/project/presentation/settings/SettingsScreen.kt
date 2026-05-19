@@ -29,6 +29,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import lingolocal.composeapp.generated.resources.Res
 import lingolocal.composeapp.generated.resources.settings_dev_section
 import lingolocal.composeapp.generated.resources.settings_open_llama_test
+import lingolocal.composeapp.generated.resources.settings_open_vision_test
 import lingolocal.composeapp.generated.resources.settings_theme_dark
 import lingolocal.composeapp.generated.resources.settings_theme_label
 import lingolocal.composeapp.generated.resources.settings_theme_light
@@ -38,6 +39,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.lingolocal.project.domain.model.ThemeMode
 import org.lingolocal.project.presentation.llamatest.LlamaTestScreen
+import org.lingolocal.project.presentation.visiontest.VisionTestScreen
 import org.lingolocal.project.presentation.theme.LingoIcons
 
 /**
@@ -56,7 +58,8 @@ class SettingsScreen : Screen {
         SettingsContent(
             uiState = uiState,
             onThemeSelected = screenModel::onThemeSelected,
-            onOpenLlamaTest = { navigator.push(LlamaTestScreen()) }
+            onOpenLlamaTest = { navigator.push(LlamaTestScreen()) },
+            onOpenVisionTest = { navigator.push(VisionTestScreen()) }
         )
     }
 }
@@ -65,7 +68,8 @@ class SettingsScreen : Screen {
 private fun SettingsContent(
     uiState: SettingsUiState,
     onThemeSelected: (ThemeMode) -> Unit,
-    onOpenLlamaTest: () -> Unit
+    onOpenLlamaTest: () -> Unit,
+    onOpenVisionTest: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -100,6 +104,26 @@ private fun SettingsContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onOpenLlamaTest)
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(Res.string.settings_open_vision_test)) },
+            leadingContent = {
+                Icon(
+                    imageVector = LingoIcons.Camera,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            trailingContent = {
+                Icon(
+                    imageVector = LingoIcons.KeyboardArrowRight,
+                    contentDescription = null
+                )
+            },
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenVisionTest)
         )
     }
 }
