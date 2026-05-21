@@ -18,14 +18,11 @@ class IosDeviceHardwareResolver : DeviceHardwareResolver {
         val model = UIDevice.currentDevice.model
         val deviceName = "Apple $model ($systemName $systemVersion)"
 
-        // I dispositivi iOS hanno una gestione della RAM molto aggressiva,
-        // quindi 6 GB di RAM sono ottimali per modelli da 2B parametri
+        // Strategia: privilegiamo velocità percepita. Gemma 3 1B QAT è ottimizzato
+        // per dispositivi mobili (qualità ~Q8, peso Q4).
         val (recommendedModelId, performanceTierLabel) = when {
-            totalRamGb >= 6.0 -> {
-                "gemma_4_e2b" to "Prestazioni Eccellenti 🚀 (Consigliato Gemma 4 E2B)"
-            }
             totalRamGb >= 4.0 -> {
-                "gemma_2_2b" to "Prestazioni Buone ⚡ (Consigliato Gemma 2 2B)"
+                "gemma_3_1b_qat" to "Prestazioni Buone ⚡ (Consigliato Gemma 3 1B QAT)"
             }
             else -> {
                 "qwen_0_5b" to "Risorse Limitate 🧪 (Consigliato Qwen 0.5B)"

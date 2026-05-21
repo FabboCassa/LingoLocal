@@ -4,8 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
-import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -19,15 +17,22 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.lingolocal.project.util.logError
 import org.lingolocal.project.util.logInfo
-import java.io.File
 
+/**
+ * Cattura voce dell'utente usando ESCLUSIVAMENTE SpeechRecognizer Android (on-device).
+ *
+ * NOTA tecnica importante: Android non permette a due processi/sorgenti di leggere
+ * dal microfono contemporaneamente. In passato qui giravano MediaRecorder e
+ * SpeechRecognizer in parallelo: MediaRecorder vinceva la contesa del mic e
+ * SpeechRecognizer riceveva 0 byte → ERROR_NO_MATCH istantaneo. Ora il MediaRecorder
+ * è stato rimosso e il microfono è dedicato a SpeechRecognizer.
+ */
 actual class AudioRecorder actual constructor() : KoinComponent {
 
     private val context: Context by inject()
-    private var mediaRecorder: MediaRecorder? = null
     private var speechRecognizer: SpeechRecognizer? = null
 
-    private var currentFilePath: String? = null
+    @Volatile
     private var isRecording = false
 
     @Volatile
@@ -36,7 +41,7 @@ actual class AudioRecorder actual constructor() : KoinComponent {
     @Volatile
     private var rmsAmplitude = 0.0f
 
-    // Sincronizzazione: onResults / onError arrivano async dopo stopListening()
+    // onResults / onError arrivano async dopo stopListening(): qui sincronizziamo.
     private var resultsDeferred: CompletableDeferred<String>? = null
 
     actual fun hasPermission(): Boolean {
@@ -51,8 +56,8 @@ actual class AudioRecorder actual constructor() : KoinComponent {
     }
 
     actual suspend fun startRecording(outputFilePath: String, targetLanguage: String) {
-        // Avvia prima la registrazione del file audio di fallback su IO
-        withContext(Dispatchers.IO) {
+        // SpeechRecognizer DEVE essere creato e avviato sul Main Thread.
+        withContext(Dispatchers.Main) {
             try {
                 if (!hasPermission()) {
                     logError(TAG, "Impossibile registrare: permesso microfono mancante", null)
@@ -60,130 +65,52 @@ actual class AudioRecorder actual constructor() : KoinComponent {
                 }
 
                 if (isRecording) {
-                    stopRecording()
+                    cleanupRecognizer()
                 }
 
-                currentFilePath = outputFilePath
                 lastTranscription = ""
                 rmsAmplitude = 0.0f
                 resultsDeferred = CompletableDeferred()
-                
-                val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    MediaRecorder(context)
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaRecorder()
-                }
 
-                recorder.apply {
-                    setAudioSource(MediaRecorder.AudioSource.MIC)
-                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                    setAudioEncodingBitRate(96000)
-                    setAudioSamplingRate(16000)
-                    setAudioChannels(1)
-                    setOutputFile(outputFilePath)
-                    prepare()
-                    start()
-                }
-
-                mediaRecorder = recorder
-                isRecording = true
-                logInfo(TAG, "Registrazione audio di fallback avviata: $outputFilePath")
-            } catch (e: Exception) {
-                logError(TAG, "Errore avvio MediaRecorder", e)
-                mediaRecorder = null
-            }
-        }
-
-        // Avvia lo SpeechRecognizer nativo sul Main Thread (obbligatorio per Android SpeechRecognizer)
-        withContext(Dispatchers.Main) {
-            try {
-                if (SpeechRecognizer.isRecognitionAvailable(context)) {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                        setRecognitionListener(object : RecognitionListener {
-                            override fun onReadyForSpeech(params: Bundle?) {
-                                logInfo(TAG, "SpeechRecognizer pronto per l'ascolto")
-                            }
-
-                            override fun onBeginningOfSpeech() {
-                                logInfo(TAG, "SpeechRecognizer inizio rilevamento voce")
-                            }
-
-                            override fun onRmsChanged(rmsdB: Float) {
-                                // rmsdB spazia tipicamente da -2 a 10 dB. Normalizziamo in 0.0f - 1.0f.
-                                val norm = ((rmsdB + 2.0f) / 12.0f).coerceIn(0.0f, 1.0f)
-                                rmsAmplitude = norm
-                            }
-
-                            override fun onBufferReceived(buffer: ByteArray?) {}
-
-                            override fun onEndOfSpeech() {
-                                logInfo(TAG, "SpeechRecognizer fine rilevamento voce")
-                            }
-
-                            override fun onError(error: Int) {
-                                val message = when (error) {
-                                    SpeechRecognizer.ERROR_AUDIO -> "Errore audio"
-                                    SpeechRecognizer.ERROR_CLIENT -> "Errore client"
-                                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permessi insufficienti"
-                                    SpeechRecognizer.ERROR_NETWORK -> "Errore di rete"
-                                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Timeout di rete"
-                                    SpeechRecognizer.ERROR_NO_MATCH -> "Nessun riscontro trovato"
-                                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Servizio occupato"
-                                    SpeechRecognizer.ERROR_SERVER -> "Errore del server"
-                                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Nessun parlato rilevato"
-                                    else -> "Errore sconosciuto ($error)"
-                                }
-                                logError(TAG, "Errore SpeechRecognizer: $message", null)
-                                // Sblocca chi sta aspettando il risultato: meglio stringa vuota
-                                // piuttosto che fallback inventato. Usa partial se esiste.
-                                resultsDeferred?.complete(lastTranscription)
-                            }
-
-                            override fun onResults(results: Bundle?) {
-                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                if (!matches.isNullOrEmpty()) {
-                                    lastTranscription = matches[0]
-                                    logInfo(TAG, "SpeechRecognizer Risultati finali: $lastTranscription")
-                                }
-                                resultsDeferred?.complete(lastTranscription)
-                            }
-
-                            override fun onPartialResults(partialResults: Bundle?) {
-                                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                if (!matches.isNullOrEmpty()) {
-                                    lastTranscription = matches[0]
-                                    logInfo(TAG, "SpeechRecognizer Risultati parziali: $lastTranscription")
-                                }
-                            }
-
-                            override fun onEvent(eventType: Int, params: Bundle?) {}
-                        })
-
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            
-                            val localeStr = when (targetLanguage.lowercase()) {
-                                "it" -> "it-IT"
-                                "es" -> "es-ES"
-                                "fr" -> "fr-FR"
-                                "de" -> "de-DE"
-                                else -> "en-US"
-                            }
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeStr)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, localeStr)
-                            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, localeStr)
-                            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                        }
-
-                        startListening(intent)
-                    }
-                } else {
+                if (!SpeechRecognizer.isRecognitionAvailable(context)) {
                     logError(TAG, "SpeechRecognizer non disponibile sul dispositivo", null)
+                    return@withContext
                 }
+
+                val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                recognizer.setRecognitionListener(buildListener())
+
+                val localeStr = when (targetLanguage.lowercase()) {
+                    "it" -> "it-IT"
+                    "es" -> "es-ES"
+                    "fr" -> "fr-FR"
+                    "de" -> "de-DE"
+                    else -> "en-US"
+                }
+
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeStr)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, localeStr)
+                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, localeStr)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    // Preferenza per il riconoscimento offline (richiede il language pack installato).
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+                    // Soglie più tolleranti: l'utente sta tenendo premuto il microfono,
+                    // quindi non vogliamo che SpeechRecognizer si chiuda da solo dopo 1s di silenzio.
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
+                }
+
+                speechRecognizer = recognizer
+                isRecording = true
+                recognizer.startListening(intent)
+                logInfo(TAG, "SpeechRecognizer avviato (locale=$localeStr, preferOffline=true)")
             } catch (e: Exception) {
                 logError(TAG, "Errore inizializzazione SpeechRecognizer nativo", e)
+                cleanupRecognizer()
             }
         }
     }
@@ -193,8 +120,7 @@ actual class AudioRecorder actual constructor() : KoinComponent {
     }
 
     actual suspend fun stopRecording(): ByteArray? {
-        // Stop SpeechRecognizer sul Main Thread, MA NON distruggerlo subito:
-        // onResults/onError arrivano async dopo stopListening().
+        // Stop SpeechRecognizer sul Main Thread (NON destroy: onResults arriva dopo).
         withContext(Dispatchers.Main) {
             try {
                 speechRecognizer?.stopListening()
@@ -205,7 +131,7 @@ actual class AudioRecorder actual constructor() : KoinComponent {
             }
         }
 
-        // Aspetta fino a 3s che onResults/onError invochino complete(...)
+        // Aspetta fino a 3s che onResults/onError invochino complete(...).
         val deferred = resultsDeferred
         if (deferred != null) {
             val finalText = withTimeoutOrNull(3000L) { deferred.await() }
@@ -214,82 +140,92 @@ actual class AudioRecorder actual constructor() : KoinComponent {
             }
         }
 
-        // Ora possiamo distruggere il recognizer
         withContext(Dispatchers.Main) {
-            try {
-                speechRecognizer?.destroy()
-                speechRecognizer = null
-                resultsDeferred = null
-            } catch (e: Exception) {
-                logError(TAG, "Errore durante destroy SpeechRecognizer", e)
-            }
+            cleanupRecognizer()
         }
 
-        // Ferma il MediaRecorder su IO e restituisce i byte
-        return withContext(Dispatchers.IO) {
-            try {
-                if (!isRecording || mediaRecorder == null) {
-                    return@withContext null
-                }
-
-                val recorder = mediaRecorder!!
-                recorder.stop()
-                recorder.reset()
-                recorder.release()
-                mediaRecorder = null
-                isRecording = false
-
-                val path = currentFilePath
-                if (path != null) {
-                    val file = File(path)
-                    if (file.exists()) {
-                        val bytes = file.readBytes()
-                        logInfo(TAG, "MediaRecorder completato: ${bytes.size} byte salvati")
-                        return@withContext bytes
-                    }
-                }
-                null
-            } catch (e: Exception) {
-                logError(TAG, "Errore durante lo stop del MediaRecorder", e)
-                isRecording = false
-                mediaRecorder = null
-                null
-            }
-        }
+        // I bytes non servono più al pipeline (la trascrizione arriva da SpeechRecognizer),
+        // ma il chiamante usa `bytes.isEmpty()` come "registrazione fallita". Ritorniamo un
+        // marker non-vuoto se abbiamo ascoltato per davvero.
+        return if (lastTranscription.isNotEmpty()) ByteArray(1) else ByteArray(0)
     }
 
     actual fun getAmplitude(): Float {
-        return if (isRecording) {
-            // Se lo SpeechRecognizer fornisce ampiezza RMS valida, usiamo quella
-            if (rmsAmplitude > 0.0f) {
-                rmsAmplitude
-            } else {
-                // Altrimenti fallback su MediaRecorder
-                try {
-                    val maxAmp = mediaRecorder?.maxAmplitude ?: 0
-                    val norm = maxAmp.toFloat() / 32767.0f
-                    norm.coerceIn(0.0f, 1.0f)
-                } catch (e: Exception) {
-                    0.0f
-                }
-            }
-        } else {
-            0.0f
-        }
+        return if (isRecording) rmsAmplitude else 0.0f
     }
 
     actual fun release() {
+        cleanupRecognizer()
+        logInfo(TAG, "Risorse AudioRecorder nativo completamente rilasciate.")
+    }
+
+    private fun cleanupRecognizer() {
         try {
-            isRecording = false
-            mediaRecorder?.release()
-            mediaRecorder = null
-            
             speechRecognizer?.destroy()
-            speechRecognizer = null
-            logInfo(TAG, "Risorse AudioRecorder nativo completamente rilasciate.")
         } catch (e: Exception) {
-            logError(TAG, "Errore durante la release dell'AudioRecorder", e)
+            logError(TAG, "Errore destroy SpeechRecognizer", e)
         }
+        speechRecognizer = null
+        isRecording = false
+        resultsDeferred = null
+    }
+
+    private fun buildListener() = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {
+            logInfo(TAG, "SpeechRecognizer pronto per l'ascolto")
+        }
+
+        override fun onBeginningOfSpeech() {
+            logInfo(TAG, "SpeechRecognizer inizio rilevamento voce")
+        }
+
+        override fun onRmsChanged(rmsdB: Float) {
+            // rmsdB tipicamente -2..10 dB. Normalizziamo in 0.0..1.0.
+            val norm = ((rmsdB + 2.0f) / 12.0f).coerceIn(0.0f, 1.0f)
+            rmsAmplitude = norm
+        }
+
+        override fun onBufferReceived(buffer: ByteArray?) {}
+
+        override fun onEndOfSpeech() {
+            logInfo(TAG, "SpeechRecognizer fine rilevamento voce")
+        }
+
+        override fun onError(error: Int) {
+            val message = when (error) {
+                SpeechRecognizer.ERROR_AUDIO -> "Errore audio"
+                SpeechRecognizer.ERROR_CLIENT -> "Errore client"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permessi insufficienti"
+                SpeechRecognizer.ERROR_NETWORK -> "Errore di rete"
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Timeout di rete"
+                SpeechRecognizer.ERROR_NO_MATCH -> "Nessun riscontro trovato"
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Servizio occupato"
+                SpeechRecognizer.ERROR_SERVER -> "Errore del server"
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Nessun parlato rilevato"
+                else -> "Errore sconosciuto ($error)"
+            }
+            logError(TAG, "Errore SpeechRecognizer: $message", null)
+            resultsDeferred?.complete(lastTranscription)
+        }
+
+        override fun onResults(results: Bundle?) {
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty()) {
+                lastTranscription = matches[0]
+                logInfo(TAG, "SpeechRecognizer Risultati finali: $lastTranscription")
+            }
+            resultsDeferred?.complete(lastTranscription)
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty()) {
+                lastTranscription = matches[0]
+                logInfo(TAG, "SpeechRecognizer Risultati parziali: $lastTranscription")
+            }
+        }
+
+        override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
     private companion object {

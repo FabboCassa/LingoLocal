@@ -31,13 +31,15 @@ class AndroidDeviceHardwareResolver(private val context: Context) : DeviceHardwa
         // Conversione byte -> Gigabyte
         val totalRamGb = memInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
 
-        // Classificazione intelligente delle prestazioni locali per Pixel 8 Pro e altri modelli
+        // Strategia: privilegiamo VELOCITÀ percepita su qualità marginale.
+        // Gemma 3 1B QAT è ottimizzato Google per mobile (qualità ~Q8, peso Q4)
+        // e gira a ~15 token/s anche su mid-range. Gemma 2 2B solo se molta RAM.
         val (recommendedModelId, performanceTierLabel) = when {
-            totalRamGb >= 10.0 -> {
-                "gemma_4_e2b" to "Prestazioni Eccellenti 🚀 (Consigliato Gemma 4 E2B)"
+            totalRamGb >= 8.0 -> {
+                "gemma_3_1b_qat" to "Prestazioni Eccellenti 🚀 (Consigliato Gemma 3 1B QAT)"
             }
-            totalRamGb >= 6.0 -> {
-                "gemma_2_2b" to "Prestazioni Buone ⚡ (Consigliato Gemma 2 2B)"
+            totalRamGb >= 4.0 -> {
+                "gemma_3_1b_qat" to "Prestazioni Buone ⚡ (Consigliato Gemma 3 1B QAT)"
             }
             else -> {
                 "qwen_0_5b" to "Risorse Limitate 🧪 (Consigliato Qwen 0.5B)"

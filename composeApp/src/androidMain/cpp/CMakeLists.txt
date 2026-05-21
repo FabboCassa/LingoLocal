@@ -19,6 +19,14 @@ if(DEFINED ANDROID_ABI)
     message(STATUS "LingoLocal: Detected Android ABI: ${ANDROID_ABI}")
     if(ANDROID_ABI STREQUAL "arm64-v8a")
         set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+        # PERF: ARM KleidiAI fornisce kernel matmul ottimizzati per CPU moderne
+        # (Cortex-X3/A715, Tensor G3, Snapdragon 8 Gen 2/3). Con quant Q4_0 dà
+        # 1.5-2x di speedup nel token generation rispetto al kernel default.
+        set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+        # Online repack: se l'utente carica un GGUF Q4_0, llama.cpp lo riorganizza
+        # in formato AArch64 ottimizzato al load (q4_0_4_4 / q4_0_4_8 / q4_0_8_8
+        # in base alle istruzioni CPU disponibili: dotprod, i8mm, sve).
+        set(GGML_CPU_AARCH64 ON CACHE BOOL "" FORCE)
     elseif(ANDROID_ABI STREQUAL "x86_64")
         set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
     endif()

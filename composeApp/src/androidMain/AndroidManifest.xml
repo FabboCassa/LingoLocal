@@ -6,6 +6,18 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!--
+        Android 11+ richiede dichiarare esplicitamente la visibilità verso il
+        servizio di Speech Recognition (Google App / Voice Search). Senza
+        questa <queries>, SpeechRecognizer.isRecognitionAvailable() ritorna
+        false su molti device.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

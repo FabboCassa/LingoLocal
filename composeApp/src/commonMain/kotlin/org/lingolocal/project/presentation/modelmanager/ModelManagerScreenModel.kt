@@ -49,30 +49,39 @@ class ModelManagerScreenModel(
         private val CATALOG_MODELS = listOf(
             AiModelInfo(
                 id = "qwen_0_5b",
-                name = "🧪 Modalità Fast & Light (Qwen 0.5B)",
-                description = "Il modello più leggero in assoluto. Ideale se il tuo dispositivo ha poca memoria RAM (< 6 GB), se utilizzi un emulatore o se vuoi semplicemente risparmiare batteria e fare test rapidi.",
-                sizeLabel = "398 MB",
-                fileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-                url = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-                totalBytes = 398391328L
+                name = "🧪 Fast & Light (Qwen 2.5 0.5B · Q4_0)",
+                description = "Modello ultra-leggero quantizzato Q4_0 con repack ARM (KleidiAI). Velocissimo (~25 token/s su Pixel 8 Pro) ma con risposte semplici. Ideale per emulatore, dispositivi con < 6 GB RAM o test rapidi.",
+                sizeLabel = "337 MB",
+                fileName = "Qwen2.5-0.5B-Instruct-Q4_0.gguf",
+                url = "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_0.gguf",
+                totalBytes = 352972352L
+            ),
+            AiModelInfo(
+                id = "gemma_3_1b_qat",
+                name = "🌟 Tutor Consigliato (Gemma 3 1B QAT)",
+                description = "Modello Google ufficiale OTTIMIZZATO PER MOBILE con QAT (Quantization-Aware Training): qualità simile a Q8 ma con peso di solo 689 MB. Velocità target ~15 token/s su Pixel 8 Pro. Best balance tra qualità conversazionale e velocità.",
+                sizeLabel = "689 MB",
+                fileName = "google_gemma-3-1b-it-qat-Q4_0.gguf",
+                url = "https://huggingface.co/bartowski/google_gemma-3-1b-it-qat-GGUF/resolve/main/google_gemma-3-1b-it-qat-Q4_0.gguf",
+                totalBytes = 721918784L
             ),
             AiModelInfo(
                 id = "gemma_2_2b",
-                name = "🌟 Tutor Consigliato (Gemma 2 2B)",
-                description = "Il modello linguistico bilanciato di Google. Offre eccellenti capacità di conversazione e correzione attiva degli errori grammaticali. Rappresenta il miglior compromesso per la maggior parte dei telefoni.",
-                sizeLabel = "1.6 GB",
+                name = "💎 Qualità Massima (Gemma 2 2B)",
+                description = "Modello da 2B parametri di Google con eccellenti capacità di conversazione e correzione grammaticale. Più accurato dei modelli 1B ma più lento (~6-8 token/s su Pixel 8 Pro). Consigliato solo se hai 6+ GB di RAM libera e accetti attese di 10-15 secondi per risposta.",
+                sizeLabel = "1.63 GB",
                 fileName = "gemma-2-2b-it-Q4_K_M.gguf",
                 url = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-                totalBytes = 1678612480L
+                totalBytes = 1708582752L
             ),
             AiModelInfo(
                 id = "gemma_4_e2b",
-                name = "🧠 Tutor Avanzato (Gemma 4 E2B)",
-                description = "Il modello on-device più recente ed intelligente di Google. Offre risposte ricche di dettagli ed ottime capacità di ragionamento. Ideale per dispositivi potenti con 10+ GB di RAM.",
+                name = "🧠 Sperimentale Gemma 4 E2B (5B – LENTO)",
+                description = "⚠️ Modello reasoning multimodale di Google (5 miliardi di parametri totali). NON consigliato: anche su Pixel 8 Pro la generazione è di ~2-3 secondi per parola, con risposte di 20-60 secondi. Da provare SOLO se vuoi sperimentare con un reasoning model multimodale.",
                 sizeLabel = "3.46 GB",
                 fileName = "google_gemma-4-E2B-it-Q4_K_M.gguf",
                 url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf",
-                totalBytes = 3456864256L
+                totalBytes = 3462678272L
             )
         )
     }
@@ -281,8 +290,11 @@ class ModelManagerScreenModel(
 
             // 3. Esegui il caricamento in memoria (RAM) usando i thread suggeriti dall'hardware.
             // Pixel 8 Pro Tensor G3 → 6 thread; dispositivi entry-level → 2-4 thread.
+            // n_ctx 1024 vs 2048: KV cache ~50% più piccola, attention ~2x più veloce.
+            // 1024 token sono sufficienti per chat conversazionale (system prompt ~150 +
+            // storia conversazione + risposta da 96 token).
             val hwThreads = hardwareResolver.getHardwareInfo().recommendedThreads
-            val loadSuccess = loadModelUseCase(modelPath, contextSize = 2048, threads = hwThreads)
+            val loadSuccess = loadModelUseCase(modelPath, contextSize = 1024, threads = hwThreads)
             logInfo(TAG, "Caricamento in RAM completato. Successo: $loadSuccess (threads=$hwThreads)")
 
             if (loadSuccess) {

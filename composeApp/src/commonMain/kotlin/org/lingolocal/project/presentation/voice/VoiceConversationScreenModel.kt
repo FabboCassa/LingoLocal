@@ -224,6 +224,10 @@ class VoiceConversationScreenModel(
                 val fullPrompt = buildGemmaChatPrompt(lang, userPrompt)
 
                 val responseStringBuilder = StringBuilder()
+                // Gemma 4 e altri reasoning model emettono SEMPRE un blocco
+                // <|channel>thought ... <channel|> (anche con enable_thinking=false,
+                // ma con thought block vuoto). Quindi NON interrompiamo su quei tag —
+                // il vero output arriva dopo <channel|>. Il sanitizer lo estrae.
                 llamaRepository.generate(prompt = fullPrompt, maxTokens = 96).collect { token ->
                     responseStringBuilder.append(token)
                 }
@@ -294,19 +298,25 @@ class VoiceConversationScreenModel(
             "de" -> "German"
             else -> "English"
         }
-        val system = "You are a friendly $langName language tutor. " +
-            "Reply ONLY in $langName, in 1-2 short sentences. " +
-            "If the user's sentence has a clear grammar mistake, gently give the correct version, then ask a short follow-up question. " +
-            "If it is correct, briefly praise and ask a follow-up question. " +
-            "Do NOT write analysis, thinking, headings, bullet points, or 'Thinking Process'. Just speak naturally."
+        // Template universale (Instruction/Response). Funziona su Gemma, Qwen,
+        // Llama e gpt-oss senza dover indovinare il chat template specifico —
+        // se il GGUF ha un template proprio, llama.cpp lo applica via
+        // common_chat_templates_apply() nel JNI (vedi nativeBeginCompletion).
+        val system = "You are a friendly $langName conversation tutor. " +
+            "The user's message comes from a speech-to-text engine, so it has NO punctuation. " +
+            "Treat any short \"hi/hello\" greeting as a greeting. " +
+            "Treat sentences starting with what/who/where/when/why/how/can/do/is/are as QUESTIONS even without a question mark. " +
+            "Reply ONLY in $langName, in 1-2 short natural sentences (max 30 words). " +
+            "If the user greets, greet back and ask a friendly opener. " +
+            "If the user asks a question, answer it directly. " +
+            "If you spot a clear grammar mistake, briefly say the correct version. " +
+            "Never output analysis, 'Thinking Process', headings, bullets, lists or special tokens like <|channel|>."
 
         return buildString {
-            append("<start_of_turn>user\n")
             append(system)
-            append("\n\nUser said: \"")
+            append("\n\nUser: ")
             append(userPrompt)
-            append("\"<end_of_turn>\n")
-            append("<start_of_turn>model\n")
+            append("\nTutor:")
         }
     }
 
@@ -319,30 +329,60 @@ class VoiceConversationScreenModel(
      */
     private fun sanitizeTutorReply(raw: String): String {
         var s = raw
-        // 1. Rimuovi blocchi <think>...</think> completi
+
+        // 1. Gemma 4 / reasoning models: il vero output sta DOPO il blocco
+        //    <|channel>thought ... <channel|>. Se troviamo la chiusura del thought
+        //    block, scartiamo tutto ciò che la precede.
+        val closeMarkers = listOf("<channel|>", "<|channel|>final", "<|message|>", "</think>")
+        for (m in closeMarkers) {
+            val idx = s.lastIndexOf(m, ignoreCase = true)
+            if (idx >= 0) {
+                s = s.substring(idx + m.length)
+                break
+            }
+        }
+
+        // 2. Blocchi <think>...</think> residui (DeepSeek-style)
         s = Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE).replace(s, "")
-        // 2. Rimuovi blocchi Harmony: <|channel|>thought<|message|>...<|end|>
-        s = Regex("<\\|channel\\|>[\\s\\S]*?<\\|message\\|>", RegexOption.IGNORE_CASE).replace(s, "")
-        s = Regex("<\\|[^|>]*\\|>").replace(s, "")
-        // 3. Rimuovi tag Gemma
+
+        // 3. Tag generici Harmony / Gemma 4 (con o senza pipe di chiusura)
+        s = Regex("<\\|[^|>\\n]{0,40}\\|>").replace(s, "")            // <|...|>
+        s = Regex("<\\|[a-zA-Z_]{1,30}>").replace(s, "")              // <|...>
+        s = Regex("<[a-zA-Z_]{1,30}\\|>").replace(s, "")              // <...|>
+        s = Regex("<\\|turn\\|?>(system|user|model|assistant)?", RegexOption.IGNORE_CASE).replace(s, "")
+
+        // 4. Tag Gemma 2/3
         s = s.replace("<start_of_turn>model", "", ignoreCase = true)
             .replace("<start_of_turn>user", "", ignoreCase = true)
             .replace("<end_of_turn>", "", ignoreCase = true)
             .replace("<start_of_turn>", "", ignoreCase = true)
-        // 4. Se il modello ha aperto un "Thinking Process:" o simile, scarta tutto
-        //    finché non troviamo una riga conversazionale "vera"
-        val thinkMarkers = listOf("Thinking Process:", "Analysis:", "Reasoning:", "Step 1:")
+
+        // 5. Tag Llama/ChatML/BOS residui
+        s = Regex("<\\|im_(start|end)\\|>[^\\n]*", RegexOption.IGNORE_CASE).replace(s, "")
+        s = Regex("</?s>|<bos>|<eos>", RegexOption.IGNORE_CASE).replace(s, "")
+
+        // 6. Se il modello ha emesso SOLO reasoning in chiaro (no closing marker),
+        //    tronchiamo da marker tipici di analisi.
+        val thinkMarkers = listOf(
+            "Thinking Process:", "Thinking process:", "Analysis:", "Reasoning:",
+            "Step 1:", "Step 1.", "**Analyze", "**Determine", "**Formulate",
+            "1. **", "Grammar Check:"
+        )
         for (marker in thinkMarkers) {
             val idx = s.indexOf(marker, ignoreCase = true)
-            if (idx >= 0) {
-                // Tutto fino al marker è da scartare; dopo il marker, prendiamo solo
-                // l'eventuale linea finale "conversazionale" se presente
-                s = s.substring(0, idx)
-            }
+            if (idx >= 0) s = s.substring(0, idx)
         }
-        // 5. Pulizia righe vuote multiple e prefissi "Tutor:" / "Model:" / "Assistant:"
-        s = Regex("(?im)^(tutor|model|assistant)\\s*:\\s*").replace(s, "")
+
+        // 7. Prefissi "Tutor:" / "Model:" / "Assistant:" / "User:" all'inizio riga
+        s = Regex("(?im)^(tutor|model|assistant|user)\\s*:\\s*").replace(s, "")
+
+        // 8. Whitespace cleanup
         s = s.replace(Regex("\\n{2,}"), "\n").trim()
+
+        // 9. Se resta solo qualche parola spuria → vuoto (cade sul fallback).
+        if (s.length < 4 || s.lowercase() in setOf("thought", "message", "channel", "thinking", "final")) {
+            return ""
+        }
         return s
     }
 
