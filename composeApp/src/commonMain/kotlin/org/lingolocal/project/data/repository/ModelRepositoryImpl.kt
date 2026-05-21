@@ -1,9 +1,12 @@
 package org.lingolocal.project.data.repository
 
+import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.call.body
+import io.ktor.client.request.header
+import io.ktor.client.request.prepareGet
 import io.ktor.http.contentLength
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +26,8 @@ import org.lingolocal.project.util.logInfo
  */
 class ModelRepositoryImpl(
     private val httpClient: HttpClient,
-    private val fileStorage: FileStorage
+    private val fileStorage: FileStorage,
+    private val settings: Settings
 ) : ModelRepository {
 
     companion object {
@@ -35,29 +39,60 @@ class ModelRepositoryImpl(
             val destPath = "${fileStorage.getModelsDirectory()}/$fileName"
             logDebug(TAG, "Avvio download: url=$url, destPath=$destPath")
 
-            emit(DownloadProgress.Downloading(0, -1))
-
-            logDebug(TAG, "Invio richiesta HTTP GET...")
-            val response = httpClient.get(url)
-            val totalBytes = response.contentLength() ?: -1L
-            logDebug(TAG, "Risposta ricevuta. Content-Length: $totalBytes")
-
-            emit(DownloadProgress.Downloading(0, totalBytes))
-
-            logDebug(TAG, "Lettura body in bytes...")
-            val bytes = response.bodyAsBytes()
-            logDebug(TAG, "Body letto: ${bytes.size} bytes")
-
-            emit(DownloadProgress.Downloading(bytes.size.toLong(), totalBytes))
-
-            logDebug(TAG, "Scrittura su disco: $destPath")
-            fileStorage.writeFile(destPath) { write ->
-                write(bytes, 0, bytes.size)
+            // Controlla se c'è un file parziale per riprendere il download
+            val existingBytes = if (fileStorage.fileExists(destPath) && !settings.getBoolean("completed_$fileName", false)) {
+                fileStorage.getFileSize(destPath)
+            } else {
+                0L
             }
-            logDebug(TAG, "Scrittura completata")
 
+            emit(DownloadProgress.Downloading(existingBytes, -1))
+
+            logDebug(TAG, "Invio richiesta HTTP GET con streaming (existingBytes=$existingBytes)...")
+            httpClient.prepareGet(url) {
+                if (existingBytes > 0) {
+                    header(io.ktor.http.HttpHeaders.Range, "bytes=$existingBytes-")
+                }
+            }.execute { response ->
+                val responseLength = response.contentLength() ?: -1L
+                val isPartial = response.status == io.ktor.http.HttpStatusCode.PartialContent
+                
+                val totalBytes = if (existingBytes > 0 && isPartial) {
+                    responseLength + existingBytes
+                } else {
+                    responseLength
+                }
+
+                logDebug(TAG, "Risposta ricevuta. Status=${response.status}, Content-Length: $responseLength, totalBytes: $totalBytes")
+
+                val useAppend = existingBytes > 0 && isPartial
+                val startOffset = if (useAppend) existingBytes else 0L
+
+                emit(DownloadProgress.Downloading(startOffset, totalBytes))
+
+                val channel = response.body<io.ktor.utils.io.ByteReadChannel>()
+                val buffer = ByteArray(8192)
+                var bytesRead = startOffset
+
+                logDebug(TAG, "Scrittura in corso su disco (append=$useAppend): $destPath")
+                fileStorage.writeFile(destPath, append = useAppend) { write ->
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer, 0, buffer.size)
+                        if (read <= 0) break
+                        write(buffer, 0, read)
+                        bytesRead += read
+                        emit(DownloadProgress.Downloading(bytesRead, totalBytes))
+                    }
+                }
+
+                if (totalBytes > 0 && bytesRead < totalBytes) {
+                    throw IllegalStateException("Download incompleto: scaricati solo $bytesRead di $totalBytes byte.")
+                }
+            }
+
+            settings.putBoolean("completed_$fileName", true)
             emit(DownloadProgress.Completed(destPath))
-            logInfo(TAG, "Download completato con successo: $destPath")
+            logInfo(TAG, "Download completato con successo e registrato completed: $destPath")
         } catch (e: Exception) {
             logError(TAG, "Errore durante il download", e)
             emit(DownloadProgress.Error(e.message ?: "Download failed"))
@@ -67,18 +102,36 @@ class ModelRepositoryImpl(
     override fun isModelDownloaded(fileName: String): Boolean {
         val path = "${fileStorage.getModelsDirectory()}/$fileName"
         val exists = fileStorage.fileExists(path)
-        logDebug(TAG, "isModelDownloaded($fileName): $exists")
-        return exists
+        val completed = settings.getBoolean("completed_$fileName", false)
+        logDebug(TAG, "isModelDownloaded($fileName): exists=$exists, completed=$completed")
+        return exists && completed
     }
 
     override fun getModelPath(fileName: String): String? {
         val path = "${fileStorage.getModelsDirectory()}/$fileName"
-        return if (fileStorage.fileExists(path)) path else null
+        return if (isModelDownloaded(fileName)) path else null
     }
 
     override fun deleteModel(fileName: String): Boolean {
         val path = "${fileStorage.getModelsDirectory()}/$fileName"
         logDebug(TAG, "deleteModel: $path")
-        return fileStorage.deleteFile(path)
+        val deleted = fileStorage.deleteFile(path)
+        if (deleted) {
+            settings.remove("completed_$fileName")
+            logInfo(TAG, "File $fileName rimosso con successo e rimosso il flag completed.")
+        }
+        return deleted
+    }
+
+    override fun getDownloadedBytes(fileName: String): Long {
+        val path = "${fileStorage.getModelsDirectory()}/$fileName"
+        return fileStorage.getFileSize(path)
+    }
+
+    override fun isModelPartial(fileName: String): Boolean {
+        val path = "${fileStorage.getModelsDirectory()}/$fileName"
+        val exists = fileStorage.fileExists(path)
+        val completed = settings.getBoolean("completed_$fileName", false)
+        return exists && !completed
     }
 }

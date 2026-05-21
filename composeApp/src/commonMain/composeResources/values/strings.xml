@@ -152,4 +152,25 @@
     <string name="common_preview">Anteprima</string>
     <string name="common_save">Salva</string>
     <string name="vision_acq_default_deck_label">Mazzo Predefinito</string>
+
+    <!-- Voice Practice -->
+    <string name="voice_practice_title">Conversazione Vocale AI</string>
+    <string name="voice_practice_desc">Pratica la conversazione in lingua straniera con un insegnante AI locale, 100% offline.</string>
+    <string name="voice_practice_home_title">Studio Multimodale: Voce</string>
+    <string name="voice_practice_home_subtitle">Parla con il tutor AI in tempo reale, ricevi feedback sulla pronuncia e ascolta la sua risposta sintetizzata.</string>
+    <string name="voice_practice_hold_to_talk">Tieni premuto per parlare</string>
+    <string name="voice_practice_release_to_send">Rilascia per inviare</string>
+    <string name="voice_practice_status_idle">Tutor pronto. Tieni premuto il microfono per iniziare a parlare.</string>
+    <string name="voice_practice_status_recording">Ti sto ascoltando... Parla ora.</string>
+    <string name="voice_practice_status_transcribing">Analisi dell\'audio in corso...</string>
+    <string name="voice_practice_status_generating">Il tutor sta pensando a una risposta...</string>
+    <string name="voice_practice_status_speaking">Il tutor sta parlando...</string>
+    <string name="voice_practice_status_error">Errore nella conversazione: %1$s</string>
+    <string name="voice_practice_mic_permission_denied">Permesso microfono negato. Abilitalo nelle impostazioni per usare la voce.</string>
+    <string name="voice_practice_empty_transcript">La conversazione inizierà non appena parlerai!</string>
+    <string name="voice_practice_tutor_name">Tutor AI</string>
+    <string name="voice_practice_user_name">Tu</string>
+    <string name="voice_practice_settings_tts_speed">Velocità Voce Tutor</string>
+    <string name="home_talk_now">Parla Ora</string>
 </resources>
+

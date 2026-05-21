@@ -2,6 +2,7 @@ package org.lingolocal.project.di
 
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import org.koin.dsl.module
 import org.lingolocal.project.data.db.DatabaseDriverFactory
 import org.lingolocal.project.data.db.LingoDatabase
@@ -27,6 +28,7 @@ import org.lingolocal.project.domain.usecase.CheckModelExistsUseCase
 import org.lingolocal.project.domain.usecase.CreateDeckUseCase
 import org.lingolocal.project.domain.usecase.CreateFlashcardUseCase
 import org.lingolocal.project.domain.usecase.DeleteFlashcardUseCase
+import org.lingolocal.project.domain.usecase.DeleteModelUseCase
 import org.lingolocal.project.domain.usecase.DownloadModelUseCase
 import org.lingolocal.project.domain.usecase.GenerateEmbeddingUseCase
 import org.lingolocal.project.domain.usecase.GenerateTextUseCase
@@ -55,6 +57,13 @@ import org.lingolocal.project.presentation.textmanager.QuizScreenModel
 import org.lingolocal.project.presentation.visiontest.VisionTestScreenModel
 import org.lingolocal.project.domain.usecase.PreprocessImageUseCase
 import org.lingolocal.project.presentation.vision.VisionAcquisitionScreenModel
+import org.lingolocal.project.data.audio.SpeechToTextEngine
+import org.lingolocal.project.domain.usecase.StartAudioRecordingUseCase
+import org.lingolocal.project.domain.usecase.StopAudioRecordingUseCase
+import org.lingolocal.project.domain.usecase.TranscribeAudioUseCase
+import org.lingolocal.project.domain.usecase.SpeakTextUseCase
+import org.lingolocal.project.presentation.voice.VoiceConversationScreenModel
+
 
 /**
  * Modulo Koin principale dell'applicazione.
@@ -67,14 +76,22 @@ val appModule = module {
     single<Settings> { Settings() }
 
     // Networking
-    single { HttpClient() }
+    single {
+        HttpClient {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 1800000 // 30 minuti
+                connectTimeoutMillis = 120000  // 2 minuti
+                socketTimeoutMillis = 1800000  // 30 minuti
+            }
+        }
+    }
 
     // Database (SQLDelight) — DatabaseDriverFactory è fornito dai moduli platform-specific
     single<LingoDatabase> { createLingoDatabase(get<DatabaseDriverFactory>()) }
 
     // Data layer
     single<WelcomeRepository> { WelcomeRepositoryImpl() }
-    single<ModelRepository> { ModelRepositoryImpl(get(), get()) }
+    single<ModelRepository> { ModelRepositoryImpl(get(), get(), get()) }
     single<SettingsRepository> { SettingsRepositoryImpl(get()) }
     single<DeckRepository> { DeckRepositoryImpl(get(), get()) }
     single<FlashcardRepository> { FlashcardRepositoryImpl(get(), get()) }
@@ -84,11 +101,13 @@ val appModule = module {
     // LlamaEngine ha actual cross-platform (Android JNI, iOS stub) con costruttore no-args
     single { LlamaEngine() }
     single<LlamaRepository> { LlamaRepositoryImpl(get()) }
+    single { SpeechToTextEngine(get()) }
 
     // Domain layer
     factory { GetWelcomeMessageUseCase(get()) }
     factory { DownloadModelUseCase(get()) }
     factory { CheckModelExistsUseCase(get()) }
+    factory { DeleteModelUseCase(get()) }
     factory { InitializeLlamaUseCase(get()) }
     factory { LoadLlamaModelUseCase(get()) }
     factory { GenerateTextUseCase(get()) }
@@ -108,14 +127,20 @@ val appModule = module {
     factory { SaveQuizResultUseCase(get()) }
     factory { GetQuizResultsUseCase(get()) }
     factory { PreprocessImageUseCase() }
+    factory { StartAudioRecordingUseCase(get()) }
+    factory { StopAudioRecordingUseCase(get()) }
+    factory { TranscribeAudioUseCase(get()) }
+    factory { SpeakTextUseCase(get()) }
 
     // Presentation layer
     factory { HomeScreenModel(get(), get(), get()) }
-    factory { ModelManagerScreenModel(get(), get()) }
-    factory { LlamaTestScreenModel(get(), get(), get(), get()) }
+    factory { ModelManagerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { LlamaTestScreenModel(get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
     factory { TextRAGScreenModel(get(), get(), get(), get(), get()) }
     factory { QuizScreenModel(get()) }
     factory { VisionTestScreenModel(get()) }
     factory { VisionAcquisitionScreenModel(get(), get(), get(), get(), get()) }
+    factory { VoiceConversationScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
 }
+

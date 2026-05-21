@@ -32,4 +32,14 @@ interface ModelRepository {
      * Cancella un modello scaricato.
      */
     fun deleteModel(fileName: String): Boolean
+
+    /**
+     * Restituisce i byte correntemente scaricati di un file parziale.
+     */
+    fun getDownloadedBytes(fileName: String): Long
+
+    /**
+     * Verifica se esiste un download parziale/incompleto di un file modello.
+     */
+    fun isModelPartial(fileName: String): Boolean
 }

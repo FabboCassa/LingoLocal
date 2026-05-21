@@ -35,11 +35,12 @@ class AndroidFileStorage(
 
     override suspend fun writeFile(
         filePath: String,
+        append: Boolean,
         writer: suspend (write: (ByteArray, Int, Int) -> Unit) -> Unit
     ) {
         val file = File(filePath)
         file.parentFile?.mkdirs()
-        FileOutputStream(file).use { fos ->
+        FileOutputStream(file, append).use { fos ->
             writer { buffer, offset, length ->
                 fos.write(buffer, offset, length)
             }

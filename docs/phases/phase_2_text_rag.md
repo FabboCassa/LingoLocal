@@ -34,16 +34,17 @@ Implementare il database locale per i dati strutturati (es. sistema di ripetizio
   - Implementare `GenerateEmbeddingUseCase` che richiede l'embedding di un testo al modello on-device tramite `LlamaEngine`.
   - *Test:* Fornire un testo di 3 paragrafi, verificare la divisione in chunk e il salvataggio degli embedding nel Vector Storage. Misurare il tempo di generazione embedding per chunk.
 
-- [ ] **Task 2.4: Motore RAG e JSON Function Calling**
+- [x] **Task 2.4: Motore RAG e JSON Function Calling**
   - Implementare `RagQueryUseCase`: dato un testo di query, genera il suo embedding, recupera i top-K chunk da `VectorRepository`, li concatena come contesto.
   - Scrivere System Prompt solidi per istruire l'LLM a rispondere **esclusivamente tramite JSON** (senza markdown, senza testo libero fuori dal JSON).
   - Implementare la decodifica del JSON via `kotlinx.serialization` in data class Kotlin tipizzate.
   - Gestire il caso di JSON malformato con retry e fallback.
   - *Test:* Richiedere all'LLM di generare un quiz testuale a risposta multipla su un testo fornito; verificare il parsing automatico del JSON e che il contesto RAG sia contenuto nei token disponibili.
 
-- [ ] **Task 2.5: UI Gestione Testi e Visualizzazione Quiz**
+- [x] **Task 2.5: UI Gestione Testi e Visualizzazione Quiz**
   - Creare la UI per permettere all'utente di incollare blocchi di testo o caricare documenti PDF base.
   - Implementare la UI dinamica del Quiz renderizzata partendo dall'oggetto Kotlin decodificato dal JSON dell'LLM.
   - Mostrare feedback visivo durante l'elaborazione (chunking + embedding, che può richiedere alcuni secondi per chunk).
   - Tutte le stringhe e label fisse ("Avvia Quiz", "Carica", "Punteggio", "Elaborazione in corso...") in `strings.xml`.
   - *Test:* Flusso completo end-to-end: inserimento testo → elaborazione chunk/embedding → svolgimento quiz → verifica persistenza punteggio in SQLDelight.
+

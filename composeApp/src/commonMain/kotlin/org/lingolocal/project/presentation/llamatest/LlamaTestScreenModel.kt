@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
+import com.russhwolf.settings.Settings
 import org.lingolocal.project.domain.repository.LlamaRepository
 import org.lingolocal.project.domain.usecase.GenerateTextUseCase
 import org.lingolocal.project.domain.usecase.InitializeLlamaUseCase
@@ -25,11 +26,19 @@ class LlamaTestScreenModel(
     private val repository: LlamaRepository,
     private val initialize: InitializeLlamaUseCase,
     private val loadModel: LoadLlamaModelUseCase,
-    private val generate: GenerateTextUseCase
+    private val generate: GenerateTextUseCase,
+    private val settings: Settings
 ) : ScreenModel {
 
     private val _uiState = MutableStateFlow(LlamaTestUiState())
     val uiState: StateFlow<LlamaTestUiState> = _uiState.asStateFlow()
+
+    init {
+        val activePath = settings.getStringOrNull("active_model_path")
+        if (activePath != null) {
+            _uiState.value = _uiState.value.copy(modelPathInput = activePath)
+        }
+    }
 
     private var generationJob: Job? = null
 

@@ -38,6 +38,7 @@ interface FileStorage {
      */
     suspend fun writeFile(
         filePath: String,
+        append: Boolean = false,
         writer: suspend (write: (ByteArray, Int, Int) -> Unit) -> Unit
     )
 }

@@ -31,6 +31,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.lingolocal.project.domain.model.QuizResult
 import org.lingolocal.project.presentation.textmanager.TextRAGScreen
 import org.lingolocal.project.presentation.vision.VisionAcquisitionScreen
+import org.lingolocal.project.presentation.voice.VoiceConversationScreen
+
 
 /**
  * Dashboard principale di LingoLocal.
@@ -48,6 +50,7 @@ class HomeScreen : Screen {
             uiState = uiState,
             onNavigateToRag = { navigator.push(TextRAGScreen()) },
             onNavigateToVision = { navigator.push(VisionAcquisitionScreen()) },
+            onNavigateToVoice = { navigator.push(VoiceConversationScreen()) },
             formatTime = screenModel::formatTimeAgo
         )
     }
@@ -58,6 +61,7 @@ private fun HomeContent(
     uiState: HomeUiState,
     onNavigateToRag: () -> Unit,
     onNavigateToVision: () -> Unit,
+    onNavigateToVoice: () -> Unit,
     formatTime: (Long) -> String
 ) {
     Box(
@@ -233,6 +237,69 @@ private fun HomeContent(
                                     )
                                     Icon(
                                         imageVector = LingoIcons.Camera,
+                                        contentDescription = null,
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Premium Card per modulo Voice Practice
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable(onClick = onNavigateToVoice),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF2E7D32), // Premium Green 800
+                                            Color(0xFF00BFA5)  // Premium Teal A400
+                                        )
+                                    )
+                                )
+                                .padding(24.dp)
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.voice_practice_home_title),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = stringResource(Res.string.voice_practice_home_subtitle),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.2f))
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(Res.string.home_talk_now),
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Icon(
+                                        imageVector = LingoIcons.Mic,
                                         contentDescription = null,
                                         tint = Color.White
                                     )
