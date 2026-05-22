@@ -14,6 +14,15 @@ internal class LlamaEngineAndroid {
     external fun nativeFreeModel()
 
     external fun nativeBeginCompletion(prompt: String, nPredict: Int): Boolean
+
+    /**
+     * Path corretto per modelli instruct: passa system + user separati e
+     * lascia che il C++ applichi il chat template specifico del modello caricato
+     * (Gemma 2/3 <start_of_turn>, Qwen <|im_start|>, Llama 3 <|start_header_id|>...).
+     * Evita il bug di doppio system prompt del path legacy.
+     */
+    external fun nativeBeginCompletionChat(system: String, user: String, nPredict: Int): Boolean
+
     external fun nativeBeginCompletionWithVision(prompt: String, imageBytes: ByteArray, nPredict: Int): Boolean
 
     /**

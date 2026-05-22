@@ -23,6 +23,9 @@ class LlamaRepositoryImpl(
     override fun generate(prompt: String, imageBytes: ByteArray?, maxTokens: Int): Flow<String> =
         engine.generate(prompt, imageBytes, maxTokens)
 
+    override fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int): Flow<String> =
+        engine.generateChat(systemPrompt, userMessage, maxTokens)
+
     override suspend fun unloadModel() = engine.unloadModel()
 
     override suspend fun embed(text: String): FloatArray? = engine.embed(text)

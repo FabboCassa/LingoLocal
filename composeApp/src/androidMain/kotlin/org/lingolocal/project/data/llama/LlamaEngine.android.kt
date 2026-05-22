@@ -114,6 +114,26 @@ actual class LlamaEngine actual constructor() : KoinComponent {
         }
     }.flowOn(Dispatchers.Default)
 
+    actual fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int): Flow<String> = flow {
+        if (!modelLoaded) {
+            logError(TAG, "generateChat called without a loaded model", IllegalStateException())
+            return@flow
+        }
+        mutex.withLock {
+            val ok = native.nativeBeginCompletionChat(systemPrompt, userMessage, maxTokens)
+            if (!ok) {
+                logError(TAG, "nativeBeginCompletionChat failed", null)
+                return@withLock
+            }
+            logDebug(TAG, "Chat generation started (sys=${systemPrompt.length} usr=${userMessage.length} maxTokens=$maxTokens)")
+            while (true) {
+                val piece = native.nativeNextToken() ?: break
+                if (piece.isNotEmpty()) emit(piece)
+            }
+            logDebug(TAG, "Chat generation done")
+        }
+    }.flowOn(Dispatchers.Default)
+
     private fun getSimulatedVisionResponse(prompt: String): String {
         val promptLower = prompt.lowercase()
         return if (promptLower.contains("ricevuta") || promptLower.contains("scontrino") || promptLower.contains("receipt")) {

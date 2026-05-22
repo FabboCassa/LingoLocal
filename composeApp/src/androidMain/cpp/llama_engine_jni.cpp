@@ -1,4 +1,5 @@
 #include <android/log.h>
+#include <chrono>
 #include <jni.h>
 #include <cmath>
 #include <fstream>
@@ -46,6 +47,11 @@ static int   g_remaining = 0;
 
 static std::string g_cached_chars;
 
+// Perf counters
+static std::chrono::steady_clock::time_point g_t_gen_start;
+static int                                   g_tokens_generated = 0;
+static int                                   g_prompt_tokens    = 0;
+
 static void llama_log_to_android(ggml_log_level level, const char * text, void * /*user*/) {
     int prio = ANDROID_LOG_INFO;
     switch (level) {
@@ -59,39 +65,70 @@ static void llama_log_to_android(ggml_log_level level, const char * text, void *
 }
 
 // ---------------------------------------------------------------------------
-// CPU affinity: rileva i big core leggendo /sys/devices/system/cpu/cpuX/cpufreq/
-// cpuinfo_max_freq e pinniamo il thread chiamante (e quindi i child workers di
-// llama.cpp) sui core con la frequenza massima più alta. Su Tensor G3 questo
-// esclude i Cortex-A510 (1.7 GHz) e usa solo X3 + A715 (2.37-2.91 GHz).
-// Su Snapdragon 8 Gen 3 esclude gli A520 e usa Cortex-X4 + A720.
+// CPU affinity (big.LITTLE aware)
+//
+// BUG STORICO (fix 22 mag 2026): la versione precedente usava soglia 85% del
+// max freq, che su Tensor G3 escludeva i Cortex-A715 (2.37 GHz, 81% del 2.91
+// del Cortex-X3) e lasciava solo l'X3 nel set. Risultato: 6 thread pinati su
+// 1 core → context switching → 0.2 tok/s su 1B model.
+//
+// Nuova strategia: NON usiamo più soglia su max_freq. Ordiniamo i core per
+// freq massima decrescente e prendiamo TUTTI quelli che NON sono "little"
+// (heuristic: freq > 60% del max). Se rimangono meno di 4 core, NON pinniamo
+// (lasciamo decidere lo scheduler — è meno peggio dell'oversubscription).
 // ---------------------------------------------------------------------------
 static std::vector<int> g_big_cores;
+static bool             g_affinity_disabled = false;
 
 static void detect_big_cores() {
-    if (!g_big_cores.empty()) return;
+    if (!g_big_cores.empty() || g_affinity_disabled) return;
+
     const int n_cpus = (int) sysconf(_SC_NPROCESSORS_CONF);
     std::vector<long> freqs(n_cpus, 0);
     long max_freq = 0;
+    int  freq_files_ok = 0;
     for (int i = 0; i < n_cpus; ++i) {
         std::ostringstream path;
         path << "/sys/devices/system/cpu/cpu" << i << "/cpufreq/cpuinfo_max_freq";
         std::ifstream f(path.str());
         long v = 0;
-        if (f >> v) freqs[i] = v;
+        if (f >> v) { freqs[i] = v; ++freq_files_ok; }
         if (v > max_freq) max_freq = v;
     }
-    if (max_freq <= 0) return;
-    // Soglia: tutti i core con freq >= 85% del massimo sono "big".
-    // Su big.LITTLE classico (X3 + A715 + A510) lascia fuori solo gli A510.
-    const long threshold = (max_freq * 85) / 100;
+
+    if (max_freq <= 0 || freq_files_ok < n_cpus / 2) {
+        LOGw("CPU freq info unavailable (%d/%d files readable) — affinity disabled",
+             freq_files_ok, n_cpus);
+        g_affinity_disabled = true;
+        return;
+    }
+
+    // Soglia 60% del max: include performance + mid cores (X3+A715 su Tensor G3,
+    // X4+A720 su SD 8 Gen 3, X1+A78 su SD 888) e esclude solo i LITTLE
+    // (A510, A520, A55) che hanno freq < 60% del max.
+    const long threshold = (max_freq * 60) / 100;
     for (int i = 0; i < n_cpus; ++i) {
         if (freqs[i] >= threshold) g_big_cores.push_back(i);
     }
+
     std::ostringstream log;
-    log << "Big cores detected: ";
-    for (int c : g_big_cores) log << c << " ";
-    log << "(max_freq=" << max_freq << " kHz, threshold=" << threshold << ")";
+    log << "CPU detect: " << n_cpus << " cores total, max_freq=" << max_freq
+        << " kHz, threshold=" << threshold << " kHz, big_cores=[";
+    for (int c : g_big_cores) {
+        log << c << "(" << freqs[c] << ") ";
+    }
+    log << "]";
     LOGi("%s", log.str().c_str());
+
+    // Safety: se il set è troppo piccolo (< 4) probabilmente la heuristica
+    // ha sbagliato. Meglio NON pinnare e lasciare allo scheduler la scelta
+    // del core, piuttosto che oversubscribere 1-3 core con N thread.
+    if ((int) g_big_cores.size() < 4) {
+        LOGw("Only %d big cores detected — disabling affinity to avoid oversubscription",
+             (int) g_big_cores.size());
+        g_big_cores.clear();
+        g_affinity_disabled = true;
+    }
 }
 
 static void pin_to_big_cores() {
@@ -100,7 +137,6 @@ static void pin_to_big_cores() {
     cpu_set_t set;
     CPU_ZERO(&set);
     for (int c : g_big_cores) CPU_SET(c, &set);
-    // Affinità per il thread chiamante (i worker di llama.cpp la ereditano).
     if (sched_setaffinity(0, sizeof(set), &set) != 0) {
         LOGw("sched_setaffinity failed (non fatale)");
     }
@@ -185,6 +221,11 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeLoadModel(
     LOGi("Loading model: %s (n_ctx=%d, threads=%d)", path, g_n_ctx, g_n_threads);
 
     llama_model_params mparams = llama_model_default_params();
+    // PERF: mlock blocca le pagine del modello in RAM. Senza, Android su pressione
+    // memoria può paginare-out pesi del modello → ogni accesso = page fault → lenttisimo.
+    // Su Pixel 8 Pro con 12GB RAM dovrebbe sempre stare, ma esplicitiamo.
+    mparams.use_mlock = true;
+    mparams.use_mmap  = true;
     g_model = llama_model_load_from_file(path, mparams);
     env->ReleaseStringUTFChars(jModelPath, path);
 
@@ -197,7 +238,10 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeLoadModel(
     cparams.n_ctx           = g_n_ctx;
     cparams.n_batch         = 512;
     cparams.n_ubatch        = 512;
-    cparams.n_threads       = g_n_threads;
+    // n_threads_batch = thread per PREFILL (matmul GEMM, scala bene con thread).
+    // n_threads       = thread per GENERATION (matmul GEMV batch=1, satura a 4 thread).
+    // Su Cortex-X3+A715 più di 4 thread in gen aumenta solo contention su memoria.
+    cparams.n_threads       = std::min(g_n_threads, 4);
     cparams.n_threads_batch = g_n_threads;
     // PERF: Flash Attention dà 20-30% di speedup su Gemma 2/Qwen su CPU mobile.
     cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
@@ -237,6 +281,31 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeLoadModel(
     g_remaining = 0;
     g_cached_chars.clear();
 
+    // PERF: pre-warm — esegue una decode dummy per:
+    //  (a) page-fault tutti i pesi necessari (mmap walk),
+    //  (b) far popolare cache L1/L2 con i lookup tables del KV cache,
+    //  (c) attivare CPU governor in performance mode prima della prima vera decode.
+    // Senza questo, la prima decode reale paga 1-3 secondi di overhead "cold".
+    LOGi("Pre-warming model with single dummy decode...");
+    const auto t_warm0 = std::chrono::steady_clock::now();
+    {
+        std::vector<llama_token> warm_tokens =
+            common_tokenize(g_ctx, std::string(" "), /*add_special=*/true, /*parse_special=*/false);
+        if (!warm_tokens.empty()) {
+            common_batch_clear(g_batch);
+            for (size_t i = 0; i < warm_tokens.size(); ++i) {
+                const bool want_logit = (i == warm_tokens.size() - 1);
+                common_batch_add(g_batch, warm_tokens[i], (llama_pos) i, {0}, want_logit);
+            }
+            (void) llama_decode(g_ctx, g_batch);
+        }
+        llama_memory_clear(llama_get_memory(g_ctx), true);
+        common_sampler_reset(g_sampler);
+    }
+    const auto t_warm1 = std::chrono::steady_clock::now();
+    LOGi("Pre-warm done in %.0f ms",
+         std::chrono::duration<double, std::milli>(t_warm1 - t_warm0).count());
+
     LOGi("Model loaded OK");
     return JNI_TRUE;
 }
@@ -259,7 +328,56 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeFreeModel(
 }
 
 // ---------------------------------------------------------------------------
-// JNI: prompt feed
+// Helper: tokenize + feed a prompt string into the context in chunks <= n_batch.
+// Returns false on failure (decode error). Sets g_cur_pos on success.
+// ---------------------------------------------------------------------------
+static bool feed_prompt_chunked(const std::string & prompt_str) {
+    const auto t0 = std::chrono::steady_clock::now();
+
+    std::vector<llama_token> tokens =
+        common_tokenize(g_ctx, prompt_str, /*add_special=*/true, /*parse_special=*/true);
+    LOGi("Prompt tokenized: %d tokens", (int) tokens.size());
+
+    if ((int) tokens.size() >= g_n_ctx) {
+        LOGe("Prompt exceeds context (%d >= %d) — truncating tail",
+             (int) tokens.size(), g_n_ctx);
+        const size_t keep = (size_t) std::max(8, g_n_ctx - 4);
+        tokens.erase(tokens.begin(), tokens.begin() + (tokens.size() - keep));
+    }
+
+    const int n_batch_max = 512;
+    const int total = (int) tokens.size();
+    int processed = 0;
+    while (processed < total) {
+        const int n_this = std::min(n_batch_max, total - processed);
+        common_batch_clear(g_batch);
+        for (int i = 0; i < n_this; ++i) {
+            const int abs_idx = processed + i;
+            const bool want_logit = (abs_idx == total - 1);
+            common_batch_add(g_batch, tokens[abs_idx], (llama_pos) abs_idx, {0}, want_logit);
+        }
+        if (llama_decode(g_ctx, g_batch) != 0) {
+            LOGe("llama_decode failed during prompt feed (chunk @%d/%d)", processed, total);
+            return false;
+        }
+        processed += n_this;
+    }
+    g_cur_pos = (llama_pos) total;
+
+    const auto t1 = std::chrono::steady_clock::now();
+    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    LOGi("PERF prefill: %d tokens in %.0f ms = %.1f tok/s",
+         total, ms, (total * 1000.0) / std::max(1.0, ms));
+
+    // Reset perf counters per nuova generazione.
+    g_t_gen_start = std::chrono::steady_clock::now();
+    g_tokens_generated = 0;
+    g_prompt_tokens = total;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// JNI: prompt feed (LEGACY: raw prompt without chat template)
 // ---------------------------------------------------------------------------
 extern "C"
 JNIEXPORT jboolean JNICALL
@@ -285,60 +403,69 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeBeginCompletion(
     std::string prompt_str(prompt);
     env->ReleaseStringUTFChars(jPrompt, prompt);
 
-    // Apply chat template if the model has one (instruct models like Qwen, Gemma, Llama3…)
+    // Legacy path: il prompt arriva come singolo blocco già formattato.
+    // NON applichiamo chat template qui — evitiamo il doppio-system bug
+    // (vedi nativeBeginCompletionChat per il path corretto).
+    LOGd("nativeBeginCompletion (raw prompt): %d bytes", (int) prompt_str.size());
+    return feed_prompt_chunked(prompt_str) ? JNI_TRUE : JNI_FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// JNI: chat completion start (NEW, CORRECT path)
+// Riceve system e user separati. Applica il chat template DEL MODELLO caricato
+// (Gemma 2/3 <start_of_turn>, Qwen <|im_start|>, Llama 3 <|start_header_id|>, ecc.)
+// in modo che ogni famiglia di modelli riceva il formato a cui è stata addestrata.
+// ---------------------------------------------------------------------------
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeBeginCompletionChat(
+        JNIEnv * env, jobject /*thiz*/,
+        jstring jSystem, jstring jUser, jint nPredict) {
+    if (!g_ctx || !g_model || !g_sampler) {
+        LOGe("nativeBeginCompletionChat: model not loaded");
+        return JNI_FALSE;
+    }
+
+    pin_to_big_cores();
+    llama_memory_clear(llama_get_memory(g_ctx), true);
+    common_sampler_reset(g_sampler);
+    g_cur_pos = 0;
+    g_cached_chars.clear();
+    g_remaining = nPredict > 0 ? nPredict : 128;
+
+    const char * sys_c = env->GetStringUTFChars(jSystem, nullptr);
+    const char * usr_c = env->GetStringUTFChars(jUser,   nullptr);
+    std::string sys_str(sys_c ? sys_c : "");
+    std::string usr_str(usr_c ? usr_c : "");
+    env->ReleaseStringUTFChars(jSystem, sys_c);
+    env->ReleaseStringUTFChars(jUser,   usr_c);
+
+    std::string final_prompt;
+
     if (g_chat_templates && common_chat_templates_was_explicit(g_chat_templates.get())) {
         common_chat_templates_inputs inputs;
-        inputs.messages.push_back({"system", "You are a helpful assistant.", {}});
-        inputs.messages.push_back({"user",   prompt_str, {}});
+        if (!sys_str.empty()) {
+            inputs.messages.push_back({"system", sys_str, {}});
+        }
+        inputs.messages.push_back({"user", usr_str, {}});
         inputs.add_generation_prompt = true;
-        // Disabilita il "thinking mode" per modelli reasoning (Gemma 4, Qwen3, DeepSeek-R1).
-        // Senza questo, Gemma 4 emette un blocco <|channel>thought... che rallenta
-        // la generazione e produce output non conversazionale.
-        inputs.enable_thinking = false;
+        inputs.enable_thinking = false; // forza no chain-of-thought (Gemma 4 / Qwen3 / R1)
         try {
             auto result = common_chat_templates_apply(g_chat_templates.get(), inputs);
-            prompt_str = result.prompt;
-            LOGd("Chat template applied (thinking=off). Formatted length: %d", (int) prompt_str.size());
+            final_prompt = result.prompt;
+            LOGd("Chat template applied. sys=%d user=%d -> formatted=%d bytes",
+                 (int) sys_str.size(), (int) usr_str.size(), (int) final_prompt.size());
         } catch (...) {
-            LOGw("Chat template apply failed, using raw prompt");
+            LOGw("Chat template apply failed, fallback to manual concat");
+            final_prompt = sys_str + "\n\nUser: " + usr_str + "\nAssistant:";
         }
     } else {
-        LOGd("No explicit chat template — using raw prompt");
+        // Modello senza template esplicito (modello base) — fallback minimale.
+        LOGd("No explicit chat template — manual concat");
+        final_prompt = sys_str + "\n\nUser: " + usr_str + "\nAssistant:";
     }
 
-    std::vector<llama_token> tokens = common_tokenize(g_ctx, prompt_str, /*add_special=*/true, /*parse_special=*/true);
-    LOGi("Prompt tokenized: %d tokens", (int) tokens.size());
-
-    if ((int) tokens.size() >= g_n_ctx) {
-        LOGe("Prompt exceeds context (%d >= %d) — truncating tail keep last %d",
-             (int) tokens.size(), g_n_ctx, g_n_ctx - 4);
-        // Tronca conservando la coda (parte più recente / generation prompt).
-        const size_t keep = (size_t) std::max(8, g_n_ctx - 4);
-        tokens.erase(tokens.begin(), tokens.begin() + (tokens.size() - keep));
-    }
-
-    // Feed in chunks <= n_batch (512). Senza chunking, prompt > 512 token
-    // facevano crashare common_batch_add con GGML_ASSERT.
-    const int n_batch_max = 512;
-    const int total = (int) tokens.size();
-    int processed = 0;
-    while (processed < total) {
-        const int n_this = std::min(n_batch_max, total - processed);
-        common_batch_clear(g_batch);
-        for (int i = 0; i < n_this; ++i) {
-            const int abs_idx = processed + i;
-            const bool want_logit = (abs_idx == total - 1);
-            common_batch_add(g_batch, tokens[abs_idx], (llama_pos) abs_idx, {0}, want_logit);
-        }
-        if (llama_decode(g_ctx, g_batch) != 0) {
-            LOGe("llama_decode failed during prompt feed (chunk @%d/%d)", processed, total);
-            return JNI_FALSE;
-        }
-        processed += n_this;
-    }
-
-    g_cur_pos = (llama_pos) total;
-    return JNI_TRUE;
+    return feed_prompt_chunked(final_prompt) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C"
@@ -356,7 +483,13 @@ JNIEXPORT jstring JNICALL
 Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeNextToken(
         JNIEnv * env, jobject /*thiz*/) {
     if (!g_ctx || !g_sampler || !g_model) return nullptr;
-    if (g_remaining <= 0) return nullptr;
+    if (g_remaining <= 0) {
+        const auto t_now = std::chrono::steady_clock::now();
+        const double ms = std::chrono::duration<double, std::milli>(t_now - g_t_gen_start).count();
+        LOGi("PERF generation: %d tokens in %.0f ms = %.1f tok/s (budget exhausted)",
+             g_tokens_generated, ms, (g_tokens_generated * 1000.0) / std::max(1.0, ms));
+        return nullptr;
+    }
     if (g_cur_pos >= g_n_ctx - 4) {
         LOGw("Context budget reached — stopping");
         return nullptr;
@@ -366,17 +499,32 @@ Java_org_lingolocal_project_data_llama_LlamaEngineAndroid_nativeNextToken(
     common_sampler_accept(g_sampler, id, /*accept_grammar=*/true);
 
     if (llama_vocab_is_eog(llama_model_get_vocab(g_model), id)) {
+        const auto t_now = std::chrono::steady_clock::now();
+        const double ms = std::chrono::duration<double, std::milli>(t_now - g_t_gen_start).count();
+        LOGi("PERF generation: %d tokens in %.0f ms = %.1f tok/s (EOG)",
+             g_tokens_generated, ms, (g_tokens_generated * 1000.0) / std::max(1.0, ms));
         return nullptr;
     }
+    ++g_tokens_generated;
 
     const std::string piece = common_token_to_piece(g_ctx, id);
     g_cached_chars += piece;
 
     common_batch_clear(g_batch);
     common_batch_add(g_batch, id, g_cur_pos, {0}, true);
+
+    // Per-decode timing per diagnosticare bottleneck single-token.
+    const auto t_dec0 = std::chrono::steady_clock::now();
     if (llama_decode(g_ctx, g_batch) != 0) {
         LOGe("llama_decode failed during generation");
         return nullptr;
+    }
+    const auto t_dec1 = std::chrono::steady_clock::now();
+    const double dec_ms = std::chrono::duration<double, std::milli>(t_dec1 - t_dec0).count();
+    // Log SOLO i primi 3 e poi ogni 8 token per non spammare.
+    if (g_tokens_generated < 3 || (g_tokens_generated & 7) == 0) {
+        LOGi("PERF decode[%d]: %.1f ms (%.1f tok/s instantaneous)",
+             g_tokens_generated, dec_ms, 1000.0 / std::max(0.1, dec_ms));
     }
     g_cur_pos++;
     g_remaining--;

@@ -23,6 +23,14 @@ interface LlamaRepository {
      */
     fun generate(prompt: String, imageBytes: ByteArray? = null, maxTokens: Int = 256): Flow<String>
 
+    /**
+     * Chat completion con system + user separati. Da preferire per modelli
+     * instruct: il backend applica il chat template specifico del modello
+     * (Gemma <start_of_turn>, Qwen <|im_start|>, ecc.) eliminando il doppio
+     * system prompt e usando i token di ruolo corretti.
+     */
+    fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int = 128): Flow<String>
+
     /** Libera il modello dalla memoria. */
     suspend fun unloadModel()
 

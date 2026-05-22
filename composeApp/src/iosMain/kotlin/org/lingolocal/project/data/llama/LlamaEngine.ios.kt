@@ -35,6 +35,10 @@ actual class LlamaEngine actual constructor() {
         }
     }
 
+    actual fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int): Flow<String> = flow {
+        emit("[iOS LlamaEngine non ancora implementato — Task 1.4b]")
+    }
+
     private fun getSimulatedVisionResponse(prompt: String): String {
         val promptLower = prompt.lowercase()
         return if (promptLower.contains("ricevuta") || promptLower.contains("scontrino") || promptLower.contains("receipt")) {

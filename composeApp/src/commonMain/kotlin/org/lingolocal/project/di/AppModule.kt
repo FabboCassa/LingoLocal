@@ -57,7 +57,7 @@ import org.lingolocal.project.presentation.textmanager.QuizScreenModel
 import org.lingolocal.project.presentation.visiontest.VisionTestScreenModel
 import org.lingolocal.project.domain.usecase.PreprocessImageUseCase
 import org.lingolocal.project.presentation.vision.VisionAcquisitionScreenModel
-import org.lingolocal.project.data.audio.SpeechToTextEngine
+import org.lingolocal.project.data.whisper.WhisperEngine
 import org.lingolocal.project.domain.usecase.StartAudioRecordingUseCase
 import org.lingolocal.project.domain.usecase.StopAudioRecordingUseCase
 import org.lingolocal.project.domain.usecase.TranscribeAudioUseCase
@@ -101,7 +101,9 @@ val appModule = module {
     // LlamaEngine ha actual cross-platform (Android JNI, iOS stub) con costruttore no-args
     single { LlamaEngine() }
     single<LlamaRepository> { LlamaRepositoryImpl(get()) }
-    single { SpeechToTextEngine(get()) }
+    // WhisperEngine: singleton lazy-loaded dalla VoiceConversationScreenModel
+    // quando l'utente entra nella schermata voice chat.
+    single { WhisperEngine() }
 
     // Domain layer
     factory { GetWelcomeMessageUseCase(get()) }
@@ -141,6 +143,6 @@ val appModule = module {
     factory { QuizScreenModel(get()) }
     factory { VisionTestScreenModel(get()) }
     factory { VisionAcquisitionScreenModel(get(), get(), get(), get(), get()) }
-    factory { VoiceConversationScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { VoiceConversationScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }
 

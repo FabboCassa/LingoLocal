@@ -6,6 +6,9 @@ import org.lingolocal.project.domain.model.DownloadProgress
 /**
  * Rappresenta i metadati e lo stato di un modello AI nel Model Manager.
  */
+/** Distingue i modelli LLM (generativi) dai modelli STT (Whisper). */
+enum class ModelKind { LLM, WHISPER }
+
 data class AiModelInfo(
     val id: String,
     val name: String,
@@ -13,6 +16,7 @@ data class AiModelInfo(
     val sizeLabel: String,
     val fileName: String,
     val url: String,
+    val kind: ModelKind = ModelKind.LLM,
     val isExternal: Boolean = false,
     val isDownloaded: Boolean = false,
     val downloadProgress: DownloadProgress = DownloadProgress.Idle,

@@ -45,6 +45,15 @@ expect class LlamaEngine() {
     fun generate(prompt: String, imageBytes: ByteArray? = null, maxTokens: Int = 256): Flow<String>
 
     /**
+     * Variant chat: passa system e user separati. Il backend nativo applica il
+     * chat template SPECIFICO del modello caricato (Gemma <start_of_turn>,
+     * Qwen <|im_start|>, Llama 3 <|start_header_id|>...). Da preferire a
+     * [generate] per modelli instruct — evita il doppio system prompt e usa i
+     * token di ruolo corretti, riducendo significativamente la confusione del modello.
+     */
+    fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int = 128): Flow<String>
+
+    /**
      * Libera modello, contesto, sampler e batch. L'engine può essere
      * riutilizzato con un nuovo [loadModel].
      */

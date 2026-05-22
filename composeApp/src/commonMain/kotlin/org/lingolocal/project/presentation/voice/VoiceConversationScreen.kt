@@ -72,7 +72,8 @@ class VoiceConversationScreen : Screen {
                 }
             },
             onStopRecording = { screenModel.stopRecording() },
-            onLanguageChange = { screenModel.changeLanguage(it) }
+            onLanguageChange = { screenModel.changeLanguage(it) },
+            onDownloadWhisper = { screenModel.downloadWhisperModel() }
         )
     }
 }
@@ -84,7 +85,8 @@ private fun VoiceConversationContent(
     onBackClick: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
-    onLanguageChange: (String) -> Unit
+    onLanguageChange: (String) -> Unit,
+    onDownloadWhisper: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -202,6 +204,17 @@ private fun VoiceConversationContent(
                         lineHeight = 16.sp
                     )
                 }
+            }
+
+            // 1.5 Banner Whisper: visibile finché il modello voce non è caricato.
+            // Permette download + load del modello STT direttamente dalla chat,
+            // senza obbligare l'utente a passare dal Model Manager.
+            if (uiState.whisperMissing || uiState.whisperDownloadProgress != null || uiState.isWhisperLoading) {
+                WhisperDownloadCard(
+                    progress = uiState.whisperDownloadProgress,
+                    isLoadingInRam = uiState.isWhisperLoading,
+                    onDownloadClick = onDownloadWhisper
+                )
             }
 
             // 2. Transcripts Chat Area (Scrolled)
@@ -484,6 +497,98 @@ private fun VoiceWaveVisualizer(
                 center = androidx.compose.ui.geometry.Offset(centerX, centerY),
                 style = Stroke(width = 1.dp.toPx())
             )
+        }
+    }
+}
+
+/**
+ * Card prominente che invita l'utente a scaricare il modello voce (Whisper Tiny, 32 MB).
+ * Tre stati:
+ *  - Idle (whisperMissing): mostra bottone "Scarica modello voce"
+ *  - Downloading: mostra progress bar lineare con percentuale
+ *  - Loading in RAM: mostra spinner indeterminato con etichetta
+ */
+@Composable
+private fun WhisperDownloadCard(
+    progress: Float?,
+    isLoadingInRam: Boolean,
+    onDownloadClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.20f))
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.error.copy(alpha = 0.30f),
+                RoundedCornerShape(16.dp)
+            )
+            .padding(16.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("🎙️", fontSize = 22.sp)
+                Column {
+                    Text(
+                        text = "Modello voce richiesto",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "Per trascrivere ciò che dici serve Whisper Tiny (32 MB, multilingua, offline).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+
+            when {
+                isLoadingInRam -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            text = "Caricamento in RAM...",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                progress != null -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = "Download in corso: ${(progress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                else -> {
+                    Button(
+                        onClick = onDownloadClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("Scarica modello voce (32 MB)", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

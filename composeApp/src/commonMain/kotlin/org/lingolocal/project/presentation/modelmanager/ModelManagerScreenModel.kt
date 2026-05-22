@@ -82,6 +82,16 @@ class ModelManagerScreenModel(
                 fileName = "google_gemma-4-E2B-it-Q4_K_M.gguf",
                 url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf",
                 totalBytes = 3462678272L
+            ),
+            AiModelInfo(
+                id = "whisper_tiny_q5",
+                name = "🎙️ Voice STT (Whisper Tiny multilingua)",
+                description = "Modello Speech-To-Text on-device usato dalla chat vocale. Restituisce trascrizioni con PUNTEGGIATURA naturale (\"Come stai?\" invece di \"come stai\"), comprende it/en/es/fr/de e altre 100 lingue. Quantizzato Q5_1 a 32 MB, latenza ~1s su Pixel 8 Pro. SCARICALO prima di usare la chat vocale.",
+                sizeLabel = "32 MB",
+                fileName = "ggml-tiny-q5_1.bin",
+                url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin",
+                kind = ModelKind.WHISPER,
+                totalBytes = 32152673L
             )
         )
     }
@@ -262,6 +272,13 @@ class ModelManagerScreenModel(
      */
     fun activateModel(model: AiModelInfo) {
         if (!model.isDownloaded) return
+        // Whisper non si "attiva" da qui: viene caricato lazy dalla VoiceConversationScreenModel.
+        if (model.kind == ModelKind.WHISPER) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Il modello voce \"${model.name}\" si carica automaticamente quando entri nella chat vocale. Non serve attivarlo qui."
+            )
+            return
+        }
         logInfo(TAG, "Caricamento modello in RAM richiesto per: ${model.name}")
 
         screenModelScope.launch(exceptionHandler) {

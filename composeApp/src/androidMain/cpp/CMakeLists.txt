@@ -7,6 +7,17 @@ if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "LingoLocal: Overriding build type to RelWithDebInfo for llama.cpp performance")
 endif()
 
+# CRITICAL PERF FIX: il default di clang per RelWithDebInfo è "-O2 -g -DNDEBUG".
+# Con il last-flag-wins di clang, llama.cpp veniva compilato a -O2 NONOSTANTE
+# i nostri target_compile_options "-O3" (che si applicano solo al nostro JNI,
+# non ai sub-target llama e llama-common dove vivono le matmul hot-path).
+# Sovrascriviamo a livello globale: -O3 ovunque, manteniamo -g per debug symbols.
+set(CMAKE_C_FLAGS_RELWITHDEBINFO   "-O3 -g -DNDEBUG" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -DNDEBUG" CACHE STRING "" FORCE)
+# Stesso trattamento per Release (non usato di solito ma per sicurezza).
+set(CMAKE_C_FLAGS_RELEASE          "-O3 -DNDEBUG" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG" CACHE STRING "" FORCE)
+
 project("lingolocal_llama" VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -27,6 +38,29 @@ if(DEFINED ANDROID_ABI)
         # in formato AArch64 ottimizzato al load (q4_0_4_4 / q4_0_4_8 / q4_0_8_8
         # in base alle istruzioni CPU disponibili: dotprod, i8mm, sve).
         set(GGML_CPU_AARCH64 ON CACHE BOOL "" FORCE)
+        # llamafile è una libreria di matmul kernel per x86; su ARM/Android non
+        # serve ed è disattivata anche dalle docs ufficiali llama.cpp.
+        set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
+
+        # CRITICAL PERF FIX (22 mag 2026):
+        # llama.cpp ha la sua logica interna per settare i flag arch in
+        # ggml/src/ggml-cpu/CMakeLists.txt. Cerca GGML_CPU_ARM_ARCH e lo usa
+        # come `-march=...`. Se non è settato, va a default `armv8-a` baseline
+        # senza i8mm/dotprod, e:
+        #  - ggml_cpu_has_dotprod() / has_matmul_int8() ritornano 0 a compile
+        #    time (sono check su __ARM_FEATURE_DOTPROD / MATMUL_INT8 macro)
+        #  - KleidiAI vede mask=0 → nessun kernel matchato → 0.2 tok/s
+        # ANCHE il sub-build di KleidiAI controlla ${ARCH_FLAGS_TEMP} (derivato
+        # da GGML_CPU_ARM_ARCH) per decidere quali .c file dei kernel includere:
+        # senza "+i8mm" o "+dotprod" nel flag NON include i kernel ottimizzati,
+        # e ggml-cpu fallisce il link con "undefined symbol kai_*neon_i8mm".
+        # Quindi DEVE essere settato qui, prima dell'add_subdirectory.
+        set(GGML_CPU_ARM_ARCH "armv8.7-a+i8mm+dotprod+fp16" CACHE STRING "" FORCE)
+        set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+
+        # Manteniamo la variabile come legacy per override puntuali (ora non
+        # necessari: GGML_CPU_ARM_ARCH propaga ovunque via il sub-CMake).
+        set(LINGO_ARM_ARCH_FLAGS "-march=armv8.7-a+i8mm+dotprod+fp16")
     elseif(ANDROID_ABI STREQUAL "x86_64")
         set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
     endif()
@@ -43,17 +77,42 @@ set(LLAMA_CURL           OFF CACHE BOOL "" FORCE)
 set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/llama.cpp)
 add_subdirectory(${LLAMA_SRC} build-llama)
 
+# whisper.cpp condivide il backend GGML con llama.cpp via:
+#   if (NOT TARGET ggml) add_subdirectory(ggml) endif()
+# che skippa l'add_subdirectory di ggml (già caricato da llama.cpp).
+# Quindi linker non vede simboli duplicati: c'è UNA sola ggml/ggml-cpu.
+set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
+
+set(WHISPER_SRC ${CMAKE_CURRENT_LIST_DIR}/whisper.cpp)
+add_subdirectory(${WHISPER_SRC} build-whisper)
+
 add_library(${CMAKE_PROJECT_NAME} SHARED
-        llama_engine_jni.cpp)
+        llama_engine_jni.cpp
+        whisper_engine_jni.cpp)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}
         ${LLAMA_SRC}/common
         ${LLAMA_SRC}/include
-        ${LLAMA_SRC}/ggml/include)
+        ${LLAMA_SRC}/ggml/include
+        ${WHISPER_SRC}
+        ${WHISPER_SRC}/include)
+
+# PERF: forza -O3 sul nostro JNI (AGP a volte usa -O2 anche in release).
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release,RelWithDebInfo>:-O3>
+        $<$<CONFIG:Release,RelWithDebInfo>:-fno-math-errno>)
+
+# Architettura ARM moderna: i8mm e dotprod sono cruciali per KleidiAI.
+if(DEFINED LINGO_ARM_ARCH_FLAGS)
+    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE ${LINGO_ARM_ARCH_FLAGS})
+endif()
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
         llama-common
+        whisper
         android
         log)

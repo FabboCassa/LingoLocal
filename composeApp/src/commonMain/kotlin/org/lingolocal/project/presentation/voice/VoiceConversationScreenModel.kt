@@ -13,7 +13,11 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import org.lingolocal.project.data.platform.AudioRecorder
 import org.lingolocal.project.data.platform.FileStorage
+import org.lingolocal.project.data.whisper.WhisperEngine
+import org.lingolocal.project.domain.model.DownloadProgress
 import org.lingolocal.project.domain.repository.LlamaRepository
+import org.lingolocal.project.domain.repository.ModelRepository
+import org.lingolocal.project.domain.usecase.DownloadModelUseCase
 import org.lingolocal.project.domain.usecase.StartAudioRecordingUseCase
 import org.lingolocal.project.domain.usecase.StopAudioRecordingUseCase
 import org.lingolocal.project.domain.usecase.TranscribeAudioUseCase
@@ -42,7 +46,13 @@ data class VoiceConversationUiState(
     val messages: List<VoiceMessage> = emptyList(),
     val micAmplitude: Float = 0.0f,
     val studyLanguage: String = "en", // Lingua di studio corrente
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** True quando il modello Whisper (STT) sta caricando in RAM. */
+    val isWhisperLoading: Boolean = false,
+    /** True se Whisper non è scaricato e va richiesto il download. */
+    val whisperMissing: Boolean = false,
+    /** Progresso download Whisper (0.0..1.0) o null se non in download. */
+    val whisperDownloadProgress: Float? = null
 )
 
 class VoiceConversationScreenModel(
@@ -53,22 +63,56 @@ class VoiceConversationScreenModel(
     private val audioRecorder: AudioRecorder,
     private val llamaRepository: LlamaRepository,
     private val fileStorage: FileStorage,
-    private val clock: Clock
+    private val clock: Clock,
+    private val whisperEngine: WhisperEngine,
+    private val modelRepository: ModelRepository,
+    private val downloadModelUseCase: DownloadModelUseCase
 ) : ScreenModel {
 
     private val _uiState = MutableStateFlow(VoiceConversationUiState())
     val uiState: StateFlow<VoiceConversationUiState> = _uiState.asStateFlow()
 
     private var amplitudeJob: Job? = null
+    // Cambiato da .mp4 a .wav: il nuovo AudioRecorder scrive PCM 16-bit 16kHz mono in WAV.
     private val tempRecordingPath: String by lazy {
-        "${fileStorage.getModelsDirectory()}/temp_recording.mp4"
+        "${fileStorage.getModelsDirectory()}/temp_recording.wav"
     }
 
     init {
         screenModelScope.launch {
             resetStatusToIdle()
+            // Lazy load del modello Whisper (75 MB Q5_1) — può richiedere 200-500ms.
+            ensureWhisperLoaded()
             // Inserisci il primo messaggio di benvenuto del Tutor AI in base alla lingua
             addTutorWelcomeMessage()
+        }
+    }
+
+    /**
+     * Carica Whisper in RAM se non già caricato. Se il file non esiste sul disco,
+     * setta whisperMissing=true così la UI può mostrare "Scarica modello voce".
+     */
+    private suspend fun ensureWhisperLoaded() {
+        if (whisperEngine.isLoaded()) return
+        val whisperFile = WHISPER_MODEL_FILENAME
+        if (!modelRepository.isModelDownloaded(whisperFile)) {
+            logInfo(TAG, "Whisper non scaricato: $whisperFile")
+            _uiState.update { it.copy(whisperMissing = true) }
+            return
+        }
+        val path = modelRepository.getModelPath(whisperFile)
+        if (path.isNullOrEmpty()) {
+            logError(TAG, "Whisper path non risolto", null)
+            _uiState.update { it.copy(whisperMissing = true) }
+            return
+        }
+        _uiState.update { it.copy(isWhisperLoading = true, whisperMissing = false) }
+        val ok = whisperEngine.loadModel(path, threads = 4)
+        _uiState.update {
+            it.copy(isWhisperLoading = false, whisperMissing = !ok)
+        }
+        if (!ok) {
+            logError(TAG, "loadModel Whisper fallito", null)
         }
     }
 
@@ -112,6 +156,22 @@ class VoiceConversationScreenModel(
         }
 
         screenModelScope.launch {
+            // Se l'utente ha scaricato Whisper dopo essere entrato in questa schermata
+            // (es. via il Model Manager o il bottone in app), ricarichiamolo al volo
+            // prima di iniziare a registrare.
+            if (!whisperEngine.isLoaded()) {
+                ensureWhisperLoaded()
+                if (!whisperEngine.isLoaded()) {
+                    _uiState.update {
+                        it.copy(
+                            whisperMissing = true,
+                            errorMessage = "Scarica il modello voce (32 MB) per registrare."
+                        )
+                    }
+                    return@launch
+                }
+            }
+
             try {
                 // Interrompe eventuale TTS attiva prima di ascoltare l'utente
                 speakTextUseCase.stop()
@@ -154,6 +214,9 @@ class VoiceConversationScreenModel(
                     )
                 }
 
+                // Ferma la registrazione PCM. I bytes ritornati sono un placeholder
+                // (il file WAV completo è già stato scritto su disco). Whisper lo
+                // legge direttamente dal path per evitare doppia copia in RAM.
                 val audioBytes = stopAudioRecordingUseCase()
                 if (audioBytes == null || audioBytes.isEmpty()) {
                     logInfo(TAG, "Nessun audio registrato o file vuoto.")
@@ -162,9 +225,9 @@ class VoiceConversationScreenModel(
                     return@launch
                 }
 
-                // Esegui la trascrizione locale STT
+                // Esegui la trascrizione locale STT via Whisper (passa path WAV).
                 val lang = _uiState.value.studyLanguage
-                val transcription = transcribeAudioUseCase(audioBytes, lang)
+                val transcription = transcribeAudioUseCase(tempRecordingPath, lang)
                 
                 if (transcription.isBlank()) {
                     val noSpeechMsg = when (_uiState.value.studyLanguage.lowercase()) {
@@ -221,14 +284,17 @@ class VoiceConversationScreenModel(
             var tutorReply = ""
 
             if (llamaRepository.isReady()) {
-                val fullPrompt = buildGemmaChatPrompt(lang, userPrompt)
+                val systemPrompt = buildTutorSystemPrompt(lang)
 
                 val responseStringBuilder = StringBuilder()
-                // Gemma 4 e altri reasoning model emettono SEMPRE un blocco
-                // <|channel>thought ... <channel|> (anche con enable_thinking=false,
-                // ma con thought block vuoto). Quindi NON interrompiamo su quei tag —
-                // il vero output arriva dopo <channel|>. Il sanitizer lo estrae.
-                llamaRepository.generate(prompt = fullPrompt, maxTokens = 96).collect { token ->
+                // Usa generateChat: il backend applica il chat template specifico
+                // del modello caricato (Gemma <start_of_turn>, Qwen <|im_start|>...).
+                // Niente più doppio system prompt né ruoli confusi.
+                llamaRepository.generateChat(
+                    systemPrompt = systemPrompt,
+                    userMessage = userPrompt,
+                    maxTokens = 96
+                ).collect { token ->
                     responseStringBuilder.append(token)
                 }
                 tutorReply = sanitizeTutorReply(responseStringBuilder.toString())
@@ -290,7 +356,7 @@ class VoiceConversationScreenModel(
      * confonde i sampler. Le istruzioni sono brevi e VIETANO esplicitamente
      * la chain-of-thought visibile (che è ciò che dumpava "Thinking Process:").
      */
-    private fun buildGemmaChatPrompt(lang: String, userPrompt: String): String {
+    private fun buildTutorSystemPrompt(lang: String): String {
         val langName = when (lang.lowercase()) {
             "it" -> "Italian"
             "es" -> "Spanish"
@@ -298,26 +364,18 @@ class VoiceConversationScreenModel(
             "de" -> "German"
             else -> "English"
         }
-        // Template universale (Instruction/Response). Funziona su Gemma, Qwen,
-        // Llama e gpt-oss senza dover indovinare il chat template specifico —
-        // se il GGUF ha un template proprio, llama.cpp lo applica via
-        // common_chat_templates_apply() nel JNI (vedi nativeBeginCompletion).
-        val system = "You are a friendly $langName conversation tutor. " +
-            "The user's message comes from a speech-to-text engine, so it has NO punctuation. " +
-            "Treat any short \"hi/hello\" greeting as a greeting. " +
-            "Treat sentences starting with what/who/where/when/why/how/can/do/is/are as QUESTIONS even without a question mark. " +
-            "Reply ONLY in $langName, in 1-2 short natural sentences (max 30 words). " +
+        // System prompt SOLO. La formattazione chat (ruoli, separator token,
+        // generation prompt) la fa il backend nativo applicando il template
+        // del modello caricato. Manteniamo il system compatto per minimizzare
+        // i token da processare ad ogni turno.
+        return "You are a friendly $langName conversation tutor. " +
+            "The user's message comes from speech-to-text, so it has no punctuation. " +
+            "Treat sentences starting with what/who/where/when/why/how/can/do/is/are as questions. " +
+            "Reply ONLY in $langName, in 1-2 short natural sentences (max 25 words). " +
             "If the user greets, greet back and ask a friendly opener. " +
-            "If the user asks a question, answer it directly. " +
-            "If you spot a clear grammar mistake, briefly say the correct version. " +
-            "Never output analysis, 'Thinking Process', headings, bullets, lists or special tokens like <|channel|>."
-
-        return buildString {
-            append(system)
-            append("\n\nUser: ")
-            append(userPrompt)
-            append("\nTutor:")
-        }
+            "If they ask a question, answer it directly. " +
+            "If you spot a clear grammar mistake, briefly give the correct form. " +
+            "Never output analysis, headings, bullets, or any special tokens."
     }
 
     /**
@@ -477,16 +535,80 @@ class VoiceConversationScreenModel(
         _uiState.update { it.copy(micAmplitude = 0.0f) }
     }
 
+    /**
+     * Tenta di ricaricare Whisper dopo che l'utente ha scaricato il modello
+     * dal Model Manager e torna alla schermata voice chat.
+     */
+    fun retryLoadWhisper() {
+        screenModelScope.launch { ensureWhisperLoaded() }
+    }
+
+    /**
+     * Scarica direttamente il modello Whisper Tiny dalla schermata voice chat,
+     * mostrando il progresso (whisperDownloadProgress). Al completamento carica
+     * automaticamente il modello in RAM.
+     *
+     * Pensato per il caso in cui l'utente entra in voice chat senza aver mai
+     * scaricato Whisper: dal bottone "Scarica modello voce (32 MB)".
+     */
+    fun downloadWhisperModel() {
+        screenModelScope.launch {
+            _uiState.update { it.copy(whisperDownloadProgress = 0f, errorMessage = null) }
+            try {
+                downloadModelUseCase(WHISPER_MODEL_URL, WHISPER_MODEL_FILENAME).collect { p ->
+                    when (p) {
+                        is DownloadProgress.Downloading -> {
+                            _uiState.update { it.copy(whisperDownloadProgress = p.progressPercent) }
+                        }
+                        is DownloadProgress.Completed -> {
+                            logInfo(TAG, "Whisper downloaded, loading in RAM...")
+                            _uiState.update {
+                                it.copy(whisperDownloadProgress = 1f, isWhisperLoading = true)
+                            }
+                            ensureWhisperLoaded()
+                            _uiState.update {
+                                it.copy(whisperDownloadProgress = null, whisperMissing = !whisperEngine.isLoaded())
+                            }
+                        }
+                        is DownloadProgress.Error -> {
+                            logError(TAG, "Whisper download error: ${p.message}", null)
+                            _uiState.update {
+                                it.copy(
+                                    whisperDownloadProgress = null,
+                                    errorMessage = "Download fallito: ${p.message}"
+                                )
+                            }
+                        }
+                        DownloadProgress.Idle -> { /* no-op */ }
+                    }
+                }
+            } catch (t: Throwable) {
+                logError(TAG, "Whisper download threw", t)
+                _uiState.update {
+                    it.copy(
+                        whisperDownloadProgress = null,
+                        errorMessage = "Download fallito: ${t.message ?: "errore sconosciuto"}"
+                    )
+                }
+            }
+        }
+    }
+
     override fun onDispose() {
         amplitudeJob?.cancel()
         audioRecorder.release()
         screenModelScope.launch {
             speakTextUseCase.stop()
+            // Libera la RAM occupata da Whisper quando l'utente esce dalla chat vocale.
+            whisperEngine.unloadModel()
         }
         super.onDispose()
     }
 
     private companion object {
         private const val TAG = "VoiceConversationScreenModel"
+        private const val WHISPER_MODEL_FILENAME = "ggml-tiny-q5_1.bin"
+        private const val WHISPER_MODEL_URL =
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin"
     }
 }
