@@ -39,7 +39,11 @@ data class VisionAcquisitionUiState(
     val availableDecks: List<Deck> = emptyList(),
     val selectedDeckId: Long? = null,
     val originalSizeText: String? = null,
-    val processedSizeText: String? = null
+    val processedSizeText: String? = null,
+    val imageList: List<ByteArray> = emptyList(),
+    val processedImageList: List<ByteArray> = emptyList(),
+    val selectedImageIndex: Int = 0,
+    val targetLanguage: String = "es"
 )
 
 class VisionAcquisitionScreenModel(
@@ -78,7 +82,11 @@ class VisionAcquisitionScreenModel(
 
         val origSizeText = formatSize(bytes.size)
         _uiState.update { state ->
+            val updatedList = state.imageList + bytes
+            val nextSelectedIndex = updatedList.lastIndex
             state.copy(
+                imageList = updatedList,
+                selectedImageIndex = nextSelectedIndex,
                 imageBytes = bytes,
                 originalSizeText = origSizeText,
                 processedImageBytes = null,
@@ -91,15 +99,25 @@ class VisionAcquisitionScreenModel(
             )
         }
 
+        val currentIndex = _uiState.value.imageList.lastIndex
         screenModelScope.launch {
             try {
                 // Ridimensiona e comprime off-thread
                 val processed = preprocessImageUseCase(bytes)
                 val procSizeText = formatSize(processed.size)
                 _uiState.update { state ->
+                    val updatedProcessedList = state.processedImageList.toMutableList()
+                    while (updatedProcessedList.size <= currentIndex) {
+                        updatedProcessedList.add(ByteArray(0))
+                    }
+                    updatedProcessedList[currentIndex] = processed
+                    
+                    // Se questa è ancora l'immagine selezionata, aggiorna anche le variabili di compatibilità
+                    val isCurrentlySelected = state.selectedImageIndex == currentIndex
                     state.copy(
-                        processedImageBytes = processed,
-                        processedSizeText = procSizeText,
+                        processedImageList = updatedProcessedList,
+                        processedImageBytes = if (isCurrentlySelected) processed else state.processedImageBytes,
+                        processedSizeText = if (isCurrentlySelected) procSizeText else state.processedSizeText,
                         isProcessingImage = false
                     )
                 }
@@ -114,6 +132,105 @@ class VisionAcquisitionScreenModel(
                 }
             }
         }
+    }
+
+    fun onSelectImage(index: Int) {
+        _uiState.update { state ->
+            if (index in state.imageList.indices) {
+                val origBytes = state.imageList[index]
+                val procBytes = state.processedImageList.getOrNull(index)?.takeIf { it.isNotEmpty() }
+                state.copy(
+                    selectedImageIndex = index,
+                    imageBytes = origBytes,
+                    originalSizeText = formatSize(origBytes.size),
+                    processedImageBytes = procBytes,
+                    processedSizeText = procBytes?.let { formatSize(it.size) }
+                )
+            } else state
+        }
+    }
+
+    fun onRemoveImage(index: Int) {
+        _uiState.update { state ->
+            if (index !in state.imageList.indices) return@update state
+            val newList = state.imageList.filterIndexed { idx, _ -> idx != index }
+            val newProcessedList = if (index in state.processedImageList.indices) {
+                state.processedImageList.filterIndexed { idx, _ -> idx != index }
+            } else {
+                state.processedImageList
+            }
+            val newSelectedIndex = if (newList.isEmpty()) 0 else {
+                if (state.selectedImageIndex >= newList.size) newList.lastIndex else state.selectedImageIndex
+            }
+            val origBytes = newList.getOrNull(newSelectedIndex)
+            val procBytes = newProcessedList.getOrNull(newSelectedIndex)?.takeIf { it.isNotEmpty() }
+            state.copy(
+                imageList = newList,
+                processedImageList = newProcessedList,
+                selectedImageIndex = newSelectedIndex,
+                imageBytes = origBytes,
+                originalSizeText = origBytes?.let { formatSize(it.size) },
+                processedImageBytes = procBytes,
+                processedSizeText = procBytes?.let { formatSize(it.size) },
+                rawResultJson = null,
+                extractedResult = null
+            )
+        }
+    }
+
+    fun onTargetLanguageSelected(lang: String) {
+        _uiState.update { it.copy(targetLanguage = lang) }
+    }
+
+    private fun extractJson(raw: String): String {
+        var cleaned = raw.trim()
+        if (cleaned.startsWith("```json")) {
+            cleaned = cleaned.substringAfter("```json").substringBeforeLast("```").trim()
+        } else if (cleaned.startsWith("```")) {
+            cleaned = cleaned.substringAfter("```").substringBeforeLast("```").trim()
+        }
+        val start = cleaned.indexOf('{')
+        val end = cleaned.lastIndexOf('}')
+        if (start != -1 && end != -1 && end > start) {
+            cleaned = cleaned.substring(start, end + 1)
+        }
+        return cleaned
+    }
+
+    private fun mergeVisionResults(results: List<VisionResult>): VisionResult {
+        if (results.isEmpty()) {
+            return VisionResult(
+                tipo = "Generale",
+                lingua_originale = _uiState.value.targetLanguage,
+                testo_estratto = "",
+                traduzione = ""
+            )
+        }
+        if (results.size == 1) return results[0]
+
+        val first = results.first()
+        val argomenti = results.mapNotNull { it.argomento }.filter { it.isNotBlank() }.distinct()
+        val argomento = if (argomenti.isNotEmpty()) argomenti.joinToString(", ") else null
+        
+        val testoEstratto = results.joinToString("\n\n---\n\n") { it.testo_estratto }
+        val traduzione = results.joinToString("\n\n---\n\n") { it.traduzione }
+        
+        val entita = results.flatMap { it.entita ?: emptyList() }.distinctBy { it.chiave }
+        val regoleGrammaticali = results.flatMap { it.regoleGrammaticali ?: emptyList() }
+            .distinctBy { it.regola.lowercase() }
+        val vocaboliChiave = results.flatMap { it.vocaboli_chiave ?: emptyList() }
+            .distinctBy { it.originale.lowercase() }
+
+        return VisionResult(
+            tipo = first.tipo,
+            lingua_originale = first.lingua_originale,
+            argomento = argomento,
+            testo_estratto = testoEstratto,
+            traduzione = traduzione,
+            entita = entita,
+            regoleGrammaticali = regoleGrammaticali,
+            vocaboli_chiave = vocaboliChiave
+        )
     }
 
     fun onDocumentTypeSelected(type: String) {
@@ -139,8 +256,8 @@ class VisionAcquisitionScreenModel(
 
     fun onStartAnalysis() {
         screenModelScope.launch {
-            val targetBytes = _uiState.value.processedImageBytes ?: _uiState.value.imageBytes
-            if (targetBytes == null) {
+            val imagesToProcess = _uiState.value.processedImageList.filter { it.isNotEmpty() }.ifEmpty { _uiState.value.imageList }
+            if (imagesToProcess.isEmpty()) {
                 val errorMsg = getString(Res.string.vision_acq_err_no_image)
                 _uiState.update { it.copy(errorMessage = errorMsg) }
                 return@launch
@@ -163,49 +280,92 @@ class VisionAcquisitionScreenModel(
                 llamaRepository.initialize()
                 delay(600)
 
-                // FASE 2: Aggiorna lo stato di avanzamento
-                val stepPixel = getString(Res.string.vision_acq_step_pixel_sampling)
-                _uiState.update { it.copy(analysisStep = stepPixel) }
-                delay(600)
-
-                // FASE 3: Genera il prompt multimodale in base al tipo di documento selezionato
-                val stepInference = getString(Res.string.vision_acq_step_inference)
-                _uiState.update { it.copy(analysisStep = stepInference) }
-                
+                val resultsList = mutableListOf<VisionResult>()
                 val docType = _uiState.value.documentType
+                val targetLang = _uiState.value.targetLanguage
+                val targetLangName = when(targetLang) {
+                    "es" -> "Spagnolo"
+                    "en" -> "Inglese"
+                    "fr" -> "Francese"
+                    "de" -> "Tedesco"
+                    "it" -> "Italiano"
+                    else -> "Spagnolo"
+                }
+
                 val prompt = when (docType) {
                     "Ricevuta" -> "Estrai testo, articoli, totale ed entità da questa ricevuta o scontrino e restituisci in formato JSON."
-                    "Grammatica" -> "Estrai concetti, spiegazioni e regole da questa pagina di grammatica e restituisci in formato JSON."
-                    else -> "Estrai tutto il testo da questa immagine e restituisci una traduzione e concetti chiave in JSON."
+                    "Grammatica" -> """
+                        Analizza questa pagina di un libro di grammatica o materiale didattico.
+                        L'utente sta studiando la lingua: $targetLangName ($targetLang).
+                        IMPORTANTE: Anche se le spiegazioni o gli esercizi sulla pagina sono scritti in un'altra lingua (es. Italiano per spiegare lo Spagnolo), devi trattare il $targetLangName come la lingua di studio ('lingua_originale').
+                        Quindi:
+                        1. Estrai i vocaboli chiave ('vocaboli_chiave') in cui 'originale' è nella lingua di studio ($targetLangName) e 'traduzione' è nella lingua delle spiegazioni (es. Italiano).
+                        2. Identifica le regole grammaticali ('regoleGrammaticali') riferite esclusivamente alle strutture del $targetLangName.
+                        3. Restituisci il risultato strutturato ESCLUSIVAMENTE in formato JSON con questo schema:
+                        {
+                          "tipo": "Grammatica",
+                          "lingua_originale": "$targetLang",
+                          "argomento": "Argomento grammaticale principale della pagina",
+                          "testo_estratto": "Il testo completo trascritto dalla pagina",
+                          "traduzione": "Traduzione in italiano di eventuali testi d'esempio o spiegazioni",
+                          "regele_grammaticali": [
+                            {"regola": "Nome regola", "dettaglio": "Descrizione in italiano"}
+                          ],
+                          "vocaboli_chiave": [
+                            {"originale": "parola in $targetLangName", "traduzione": "parola in italiano", "pronuncia": "pronuncia approssimativa"}
+                          ]
+                        }
+                    """.trimIndent()
+                    else -> """
+                        Estrai il testo da questa immagine e restituisci concetti chiave in JSON.
+                        Tratta la lingua di studio come $targetLangName ($targetLang).
+                        L'oggetto JSON restituito deve avere questo schema:
+                        {
+                          "tipo": "Generale",
+                          "lingua_originale": "$targetLang",
+                          "testo_estratto": "Il testo completo estratto",
+                          "traduzione": "Traduzione in italiano",
+                          "vocaboli_chiave": [
+                            {"originale": "parola in $targetLangName", "traduzione": "traduzione in italiano", "pronuncia": ""}
+                          ]
+                        }
+                    """.trimIndent()
                 }
 
-                // Chiamata all'engine locale
-                val responseStringBuilder = StringBuilder()
-                llamaRepository.generate(prompt = prompt, imageBytes = targetBytes, maxTokens = 1024).collect { token ->
-                    responseStringBuilder.append(token)
-                    // Durante lo streaming aggiorniamo il testo grezzo per mostrare il caricamento reattivo
-                    _uiState.update { state ->
-                        state.copy(rawResultJson = responseStringBuilder.toString())
+                for (i in imagesToProcess.indices) {
+                    val stepInference = "Analisi pagina ${i + 1} di ${imagesToProcess.size} in corso..."
+                    _uiState.update { it.copy(analysisStep = stepInference) }
+                    
+                    val responseStringBuilder = StringBuilder()
+                    llamaRepository.generate(prompt = prompt, imageBytes = imagesToProcess[i], maxTokens = 1024).collect { token ->
+                        responseStringBuilder.append(token)
+                        _uiState.update { state ->
+                            state.copy(rawResultJson = "Elaborazione pagina ${i + 1}/${imagesToProcess.size}...\n\n" + responseStringBuilder.toString())
+                        }
                     }
+
+                    val finalJsonString = responseStringBuilder.toString().trim()
+                    logInfo(TAG, "Pagina ${i + 1} risposta grezza: $finalJsonString")
+
+                    val parsedResult = withContext(Dispatchers.Default) {
+                        json.decodeFromString<VisionResult>(extractJson(finalJsonString))
+                    }
+                    resultsList.add(parsedResult)
                 }
 
-                val finalJsonString = responseStringBuilder.toString().trim()
-                logInfo(TAG, "Risposta JSON grezza ricevuta: $finalJsonString")
-
-                // FASE 4: Parsing del risultato
                 val stepDecoding = getString(Res.string.vision_acq_step_decoding)
                 _uiState.update { it.copy(analysisStep = stepDecoding) }
                 delay(400)
 
-                val parsedResult = withContext(Dispatchers.Default) {
-                    json.decodeFromString<VisionResult>(finalJsonString)
+                val mergedResult = withContext(Dispatchers.Default) {
+                    mergeVisionResults(resultsList)
                 }
 
                 _uiState.update { state ->
                     state.copy(
                         isAnalyzing = false,
                         analysisStep = null,
-                        extractedResult = parsedResult
+                        extractedResult = mergedResult
                     )
                 }
 

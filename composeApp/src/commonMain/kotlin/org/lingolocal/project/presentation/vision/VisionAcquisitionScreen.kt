@@ -3,6 +3,7 @@ package org.lingolocal.project.presentation.vision
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -87,6 +88,7 @@ class VisionAcquisitionScreen : Screen {
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     // Header card
+                    // Header card
                     if (uiState.extractedResult == null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -111,6 +113,80 @@ class VisionAcquisitionScreen : Screen {
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
+                            }
+                        }
+
+                        // NEW: Target Study Language Selector
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = LingoIcons.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(Res.string.vision_acq_study_language),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                
+                                var langExpanded by remember { mutableStateOf(false) }
+                                val studyLangs = listOf(
+                                    "es" to "Español 🇪🇸",
+                                    "en" to "English 🇬🇧",
+                                    "fr" to "Français 🇫🇷",
+                                    "de" to "Deutsch 🇩🇪",
+                                    "it" to "Italiano 🇮🇹"
+                                )
+                                val selectedLangPair = studyLangs.find { it.first == uiState.targetLanguage } ?: ("es" to "Español 🇪🇸")
+                                
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { langExpanded = true },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(selectedLangPair.second, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = LingoIcons.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = langExpanded,
+                                        onDismissRequest = { langExpanded = false }
+                                    ) {
+                                        studyLangs.forEach { (code, label) ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                onClick = {
+                                                    screenModel.onTargetLanguageSelected(code)
+                                                    langExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -271,8 +347,151 @@ class VisionAcquisitionScreen : Screen {
                         }
                     }
 
+                    // NEW: Horizontal thumbnails queue (only visible if we have images and we are not looking at the final analysis results)
+                    if (uiState.imageList.isNotEmpty() && uiState.extractedResult == null) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.vision_acq_page_count, uiState.imageList.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                uiState.imageList.forEachIndexed { index, imgBytes ->
+                                    val isSelected = index == uiState.selectedImageIndex
+                                    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                    val borderWidth = if (isSelected) 3.dp else 1.dp
+                                    val borderModifier = if (isSelected) {
+                                        Modifier.border(BorderStroke(borderWidth, borderColor), RoundedCornerShape(10.dp))
+                                    } else {
+                                        Modifier.border(BorderStroke(borderWidth, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), RoundedCornerShape(10.dp))
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .then(borderModifier)
+                                            .background(Color.DarkGray)
+                                            .clickable { screenModel.onSelectImage(index) }
+                                    ) {
+                                        val thumbBitmap = remember(imgBytes) {
+                                            try {
+                                                imgBytes.decodeToImageBitmap()
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        }
+                                        if (thumbBitmap != null) {
+                                            Image(
+                                                bitmap = thumbBitmap,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        
+                                        // Red close/delete icon
+                                        IconButton(
+                                            onClick = { screenModel.onRemoveImage(index) },
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .align(Alignment.TopEnd)
+                                                .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                                .padding(2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = LingoIcons.Close,
+                                                contentDescription = "Rimuovi",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                        
+                                        // Page indicator badge
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), RoundedCornerShape(topEnd = 6.dp))
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${index + 1}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Input actions and options
                     if (previewBytes != null && !uiState.isAnalyzing && uiState.extractedResult == null) {
+                        // Action buttons to add more photos when we already have at least one!
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.vision_acq_add_image),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { imagePickerLauncher.launchCamera() },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = LingoIcons.Camera, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text(stringResource(Res.string.vision_acq_camera), style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { imagePickerLauncher.launchGallery() },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = LingoIcons.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text(stringResource(Res.string.vision_acq_gallery), style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Options Card
                         Card(
                             modifier = Modifier.fillMaxWidth(),

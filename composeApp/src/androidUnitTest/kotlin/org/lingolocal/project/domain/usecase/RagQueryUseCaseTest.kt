@@ -21,6 +21,7 @@ class RagQueryUseCaseTest {
         override suspend fun loadModel(modelPath: String, contextSize: Int, threads: Int) = true
         override fun isReady() = true
         override fun generate(prompt: String, imageBytes: ByteArray?, maxTokens: Int): Flow<String> = flowOf("")
+        override fun generateChat(systemPrompt: String, userMessage: String, maxTokens: Int): Flow<String> = flowOf("")
         override suspend fun unloadModel() {}
 
         override suspend fun embed(text: String): FloatArray? {

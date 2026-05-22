@@ -214,5 +214,17 @@
     <string name="settings_lang_fr">Français 🇫🇷</string>
     <string name="settings_lang_de">Deutsch 🇩🇪</string>
     <string name="voice_practice_llm_missing">Non posso rispondere. Per favore, scarica un modello AI dal catalogo e attivalo in memoria RAM per ricevere risposte!</string>
+
+    <!-- Quiz Chatbot & Multi-Image Vision updates -->
+    <string name="tab_quiz_chatbot">💬 Chiedi al Tutor AI</string>
+    <string name="tab_quiz_rag">📚 Quiz da Documenti (RAG)</string>
+    <string name="chat_quiz_welcome">Ciao! Sono il tuo tutor offline di lingue. Dimmi su quale argomento desideri che ti crei un quiz nella lingua da te scelta e ti preparerò le domande con spiegazioni dettagliate!</string>
+    <string name="chat_quiz_prompt_hint">Fai una domanda o chiedi un quiz (es. "creami un quiz sui pronomi riflessivi")...</string>
+    <string name="chat_quiz_start_button">Inizia il Quiz 🚀</string>
+    <string name="chat_quiz_study_language">Lingua del Quiz:</string>
+    <string name="chat_quiz_generating">Il tutor sta preparando il quiz offline...</string>
+    <string name="vision_acq_study_language">Lingua di studio:</string>
+    <string name="vision_acq_add_image">Aggiungi foto</string>
+    <string name="vision_acq_page_count">Foto caricate: %1$d</string>
 </resources>
 
