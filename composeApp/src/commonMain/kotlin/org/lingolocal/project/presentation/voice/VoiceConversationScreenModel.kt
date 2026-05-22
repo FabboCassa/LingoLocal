@@ -298,10 +298,20 @@ class VoiceConversationScreenModel(
                     responseStringBuilder.append(token)
                 }
                 tutorReply = sanitizeTutorReply(responseStringBuilder.toString())
+            } else {
+                // Se nessun modello (fuori dal whisper) è caricato in RAM, indica all'utente cosa fare
+                tutorReply = when (lang.lowercase()) {
+                    "it" -> "Non posso rispondere. Per favore, scarica un modello AI dal catalogo e attivalo in memoria RAM per ricevere risposte!"
+                    "es" -> "No puedo responder. Por favor, descarga un modelo de IA del catálogo y actívalo para recibir respuestas."
+                    "fr" -> "Je ne peux pas répondre. Veuillez télécharger un modèle d'IA dans le catalogue et l'activer pour recevoir des réponses."
+                    "de" -> "Ich kann nicht antworten. Bitte lade ein KI-Modell aus dem Katalog herunter und aktiviere es, um Antworten zu erhalten."
+                    else -> "I cannot reply. Please download an AI model from the catalog and activate it to receive responses!"
+                }
+                delay(1000)
             }
 
-            // Fallback ad alta fedeltà se llama non è carico
-            if (tutorReply.isBlank()) {
+            // Fallback ad alta fedeltà protettivo solo se il modello caricato ha generato un testo vuoto
+            if (tutorReply.isBlank() && llamaRepository.isReady()) {
                 delay(1200) // Simula la riflessione del tutor
                 tutorReply = getSimulatedTutorReply(userPrompt, lang)
             }

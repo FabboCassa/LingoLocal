@@ -178,31 +178,33 @@ private fun VoiceConversationContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             
-            // 1. Spiegazione Didascalica
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f))
-                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
-                    .padding(16.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // 1. Spiegazione Didascalica (Visible only when conversation is empty)
+            if (uiState.messages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = LingoIcons.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = stringResource(Res.string.voice_practice_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 16.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = LingoIcons.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(Res.string.voice_practice_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
             }
 
@@ -217,12 +219,12 @@ private fun VoiceConversationContent(
                 )
             }
 
-            // 2. Transcripts Chat Area (Scrolled)
+            // 2. Transcripts Chat Area (Scrolled) - Widened layout for premium aesthetics
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
@@ -295,10 +297,17 @@ private fun VoiceConversationContent(
 
                 // Pulsante rotondo "Tieni Premuto per Parlare"
                 val buttonBgColor = when {
+                    uiState.whisperMissing -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
                     uiState.isRecording -> MaterialTheme.colorScheme.error
                     uiState.isTranscribing || uiState.isAnalyzing -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
                     uiState.isSpeaking -> MaterialTheme.colorScheme.primaryContainer
                     else -> MaterialTheme.colorScheme.primary
+                }
+
+                val buttonBorderColor = if (uiState.whisperMissing) {
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                } else {
+                    Color.White.copy(alpha = 0.8f)
                 }
 
                 val buttonScale by animateFloatAsState(
@@ -312,8 +321,14 @@ private fun VoiceConversationContent(
                         .shadow(12.dp, CircleShape)
                         .clip(CircleShape)
                         .background(buttonBgColor)
-                        .border(4.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                        .pointerInput(uiState.isTranscribing, uiState.isAnalyzing) {
+                        .border(4.dp, buttonBorderColor, CircleShape)
+                        .pointerInput(uiState.isTranscribing, uiState.isAnalyzing, uiState.whisperMissing) {
+                            if (uiState.whisperMissing) {
+                                detectTapGestures(
+                                    onTap = { onDownloadWhisper() }
+                                )
+                                return@pointerInput
+                            }
                             // Se sta già elaborando, blocchiamo le interazioni del microfono
                             if (uiState.isTranscribing || uiState.isAnalyzing) return@pointerInput
                             
@@ -331,6 +346,7 @@ private fun VoiceConversationContent(
                     contentAlignment = Alignment.Center
                 ) {
                     val icon = when {
+                        uiState.whisperMissing -> LingoIcons.Download
                         uiState.isRecording -> LingoIcons.Stop
                         uiState.isTranscribing || uiState.isAnalyzing -> LingoIcons.Settings // Simbolo loading rotante
                         uiState.isSpeaking -> LingoIcons.PlayArrow
@@ -355,7 +371,7 @@ private fun VoiceConversationContent(
                             modifier = Modifier.size(36.dp)
                         )
                     } else {
-                        // Icona Statica del microfono o stop
+                        // Icona Statica del microfono, stop o download
                         Icon(
                             imageVector = icon,
                             contentDescription = stringResource(Res.string.voice_practice_hold_to_talk),
@@ -369,10 +385,18 @@ private fun VoiceConversationContent(
             Spacer(modifier = Modifier.height(12.dp))
             
             Text(
-                text = if (uiState.isRecording) stringResource(Res.string.voice_practice_release_to_send) else stringResource(Res.string.voice_practice_hold_to_talk),
+                text = when {
+                    uiState.whisperMissing -> stringResource(Res.string.voice_practice_mic_whisper_missing)
+                    uiState.isRecording -> stringResource(Res.string.voice_practice_release_to_send)
+                    else -> stringResource(Res.string.voice_practice_hold_to_talk)
+                },
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (uiState.isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                color = when {
+                    uiState.whisperMissing -> MaterialTheme.colorScheme.error
+                    uiState.isRecording -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.primary
+                },
                 modifier = Modifier.padding(bottom = 24.dp)
             )
         }
@@ -420,7 +444,7 @@ private fun ChatBubble(message: VoiceMessage) {
                 .clip(bubbleShape)
                 .background(bubbleColor)
                 .padding(horizontal = 16.dp, vertical = 10.dp)
-                .widthIn(max = 280.dp)
+                .fillMaxWidth(0.85f)
         ) {
             Text(
                 text = message.text,
@@ -517,30 +541,44 @@ private fun WhisperDownloadCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.20f))
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.error.copy(alpha = 0.30f),
-                RoundedCornerShape(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.10f)
+                    )
+                )
             )
-            .padding(16.dp)
+            .border(
+                width = 1.5.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(18.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("🎙️", fontSize = 22.sp)
+                Text("⚠️", fontSize = 24.sp)
                 Column {
                     Text(
-                        text = "Modello voce richiesto",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleSmall
+                        text = stringResource(Res.string.voice_practice_whisper_title),
+                        fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Per trascrivere ciò che dici serve Whisper Tiny (32 MB, multilingua, offline).",
+                        text = stringResource(Res.string.voice_practice_whisper_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
@@ -556,11 +594,14 @@ private fun WhisperDownloadCard(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "Caricamento in RAM...",
-                            style = MaterialTheme.typography.bodySmall
+                            text = stringResource(Res.string.voice_practice_ram_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 }
@@ -568,11 +609,13 @@ private fun WhisperDownloadCard(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         LinearProgressIndicator(
                             progress = { progress.coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.error,
+                            trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
                         )
                         Text(
-                            text = "Download in corso: ${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = stringResource(Res.string.voice_practice_downloading, (progress * 100).toInt()),
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -580,12 +623,23 @@ private fun WhisperDownloadCard(
                 else -> {
                     Button(
                         onClick = onDownloadClick,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Scarica modello voce (32 MB)", fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = LingoIcons.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(Res.string.voice_practice_download_button),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             }

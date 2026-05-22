@@ -172,5 +172,47 @@
     <string name="voice_practice_user_name">Tu</string>
     <string name="voice_practice_settings_tts_speed">Velocità Voce Tutor</string>
     <string name="home_talk_now">Parla Ora</string>
+    
+    <!-- Nuove stringhe per UI Overhaul -->
+    <string name="voice_practice_whisper_title">⚠️ MODELLO VOCE OBBLIGATORIO</string>
+    <string name="voice_practice_whisper_desc">Per poter utilizzare la chat vocale offline è indispensabile scaricare il modello di trascrizione vocale Whisper (32 MB). Senza di esso, l\'applicazione non può comprendere quello che dici.</string>
+    <string name="voice_practice_ram_loading">Caricamento in RAM...</string>
+    <string name="voice_practice_downloading">Download in corso: %1$d%%</string>
+    <string name="voice_practice_download_button">Scarica modello voce (32 MB)</string>
+    <string name="voice_practice_mic_whisper_missing">Scarica il modello voce per parlare</string>
+    <!-- Stringhe per ModelManagerScreen -->
+    <string name="model_recommended_badge">✨ Scelta consigliata per il tuo telefono</string>
+    <string name="model_manager_title">Gestione Modelli AI 🧠</string>
+    <string name="model_manager_subtitle">Configura l\'intelligenza locale di LingoLocal. I modelli scaricati vengono eseguiti al 100% offline sul tuo dispositivo, garantendo privacy assoluta e zero costi.</string>
+    <string name="model_manager_hw_scan_title">Rilevamento Hardware Dinamico ✨</string>
+    <string name="model_manager_device_detected">Dispositivo Rilevato: %1$s</string>
+    <string name="model_manager_physical_ram">Memoria RAM Fisica: %1$s GB RAM</string>
+    <string name="model_manager_available_catalog">Modelli Disponibili nel Catalogo</string>
+    <string name="model_manager_import_external_title">Importa Modello GGUF Esterno 📁</string>
+    <string name="model_manager_import_external_desc">Puoi caricare un modello GGUF scaricato da fonti esterne (es. HuggingFace). Verrà copiato nella cartella protetta dell\'app per essere usato offline.</string>
+    <string name="model_manager_storage_privacy_title">Archiviazione Locale &amp; Privacy</string>
+    <string name="model_manager_storage_privacy_desc">I modelli offline vengono scaricati nella memoria privata e protetta (sandbox) dell\'applicazione:</string>
+    <string name="model_manager_security_transparency">🔒 Sicurezza e Trasparenza:\n• Questa cartella è inaccessibile ad altre app o file manager esterni per garantire sicurezza totale.\n• Disinstallando un modello o eliminando un file parziale, lo spazio viene liberato fisicamente ed immediatamente dal tuo telefono.</string>
+    <string name="model_type_external">Esterno</string>
+    <string name="model_status_active_in_ram">Modello Attivo in RAM</string>
+    <string name="model_status_loading_in_ram">Caricamento in RAM...</string>
+    <string name="model_action_activate">Attiva in RAM 🧠</string>
+    <string name="model_action_uninstall">Disinstalla</string>
+    <string name="model_status_partial_download">Download parziale interrotto: %1$d MB di %2$d MB (%3$d%%)</string>
+    <string name="model_action_resume_download">Riprendi Download 🔄 (%1$d MB mancanti)</string>
+    <string name="model_status_download_progress">Scaricati %1$d MB di %2$d MB...</string>
+    <string name="model_status_download_error">Errore di download: %1$s</string>
+    <string name="model_action_retry_download">Riprova Download</string>
+    <string name="model_action_download">Scarica Modello 📥</string>
+
+    <!-- Settings Language & Warning -->
+    <string name="settings_language_section">Lingua</string>
+    <string name="settings_language_label">Lingua dell\'applicazione</string>
+    <string name="settings_lang_it">Italiano 🇮🇹</string>
+    <string name="settings_lang_en">English 🇬🇧</string>
+    <string name="settings_lang_es">Español 🇪🇸</string>
+    <string name="settings_lang_fr">Français 🇫🇷</string>
+    <string name="settings_lang_de">Deutsch 🇩🇪</string>
+    <string name="voice_practice_llm_missing">Non posso rispondere. Per favore, scarica un modello AI dal catalogo e attivalo in memoria RAM per ricevere risposte!</string>
 </resources>
 

@@ -43,6 +43,8 @@ import org.lingolocal.project.domain.usecase.LoadLlamaModelUseCase
 import org.lingolocal.project.domain.usecase.ObserveDecksUseCase
 import org.lingolocal.project.domain.usecase.ObserveFlashcardsUseCase
 import org.lingolocal.project.domain.usecase.SetThemeModeUseCase
+import org.lingolocal.project.domain.usecase.GetAppLanguageUseCase
+import org.lingolocal.project.domain.usecase.SetAppLanguageUseCase
 import org.lingolocal.project.domain.usecase.UpdateFlashcardUseCase
 import org.lingolocal.project.presentation.home.HomeScreenModel
 import org.lingolocal.project.presentation.llamatest.LlamaTestScreenModel
@@ -120,6 +122,8 @@ val appModule = module {
     factory { GenerateQuizUseCase(get()) }
     factory { GetThemeModeUseCase(get()) }
     factory { SetThemeModeUseCase(get()) }
+    factory { GetAppLanguageUseCase(get()) }
+    factory { SetAppLanguageUseCase(get()) }
     factory { CreateDeckUseCase(get()) }
     factory { ObserveDecksUseCase(get()) }
     factory { CreateFlashcardUseCase(get()) }
@@ -138,7 +142,7 @@ val appModule = module {
     factory { HomeScreenModel(get(), get(), get()) }
     factory { ModelManagerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { LlamaTestScreenModel(get(), get(), get(), get(), get()) }
-    factory { SettingsScreenModel(get(), get()) }
+    factory { SettingsScreenModel(get(), get(), get(), get()) }
     factory { TextRAGScreenModel(get(), get(), get(), get(), get()) }
     factory { QuizScreenModel(get()) }
     factory { VisionTestScreenModel(get()) }

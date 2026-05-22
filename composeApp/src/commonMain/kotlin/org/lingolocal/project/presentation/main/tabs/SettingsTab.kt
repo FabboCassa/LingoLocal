@@ -8,10 +8,14 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import lingolocal.composeapp.generated.resources.Res
 import lingolocal.composeapp.generated.resources.tab_settings
 import org.jetbrains.compose.resources.stringResource
+import cafe.adriel.voyager.transitions.SlideTransition
 import org.lingolocal.project.presentation.settings.SettingsScreen
 import org.lingolocal.project.presentation.theme.LingoIcons
 
 object SettingsTab : Tab {
+
+    var navigator: Navigator? = null
+        private set
 
     override val options: TabOptions
         @Composable
@@ -23,6 +27,9 @@ object SettingsTab : Tab {
 
     @Composable
     override fun Content() {
-        Navigator(SettingsScreen())
+        Navigator(SettingsScreen()) { nav ->
+            navigator = nav
+            SlideTransition(nav)
+        }
     }
 }

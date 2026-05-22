@@ -1,6 +1,7 @@
 package org.lingolocal.project.domain.repository
 
 import kotlinx.coroutines.flow.StateFlow
+import org.lingolocal.project.domain.model.AppLanguage
 import org.lingolocal.project.domain.model.ThemeMode
 
 /**
@@ -10,4 +11,7 @@ import org.lingolocal.project.domain.model.ThemeMode
 interface SettingsRepository {
     val themeMode: StateFlow<ThemeMode>
     fun setThemeMode(mode: ThemeMode)
+
+    val appLanguage: StateFlow<AppLanguage>
+    fun setAppLanguage(language: AppLanguage)
 }

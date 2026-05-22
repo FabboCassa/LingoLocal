@@ -58,9 +58,27 @@ class MainScreen : Screen {
 private fun LingoBottomBar() {
     val tabNavigator = LocalTabNavigator.current
     NavigationBar {
-        BottomBarItem(tabNavigator.current, HomeTab) { tabNavigator.current = it }
-        BottomBarItem(tabNavigator.current, ModelsTab) { tabNavigator.current = it }
-        BottomBarItem(tabNavigator.current, SettingsTab) { tabNavigator.current = it }
+        BottomBarItem(tabNavigator.current, HomeTab) {
+            if (tabNavigator.current == HomeTab) {
+                HomeTab.navigator?.popUntilRoot()
+            } else {
+                tabNavigator.current = HomeTab
+            }
+        }
+        BottomBarItem(tabNavigator.current, ModelsTab) {
+            if (tabNavigator.current == ModelsTab) {
+                ModelsTab.navigator?.popUntilRoot()
+            } else {
+                tabNavigator.current = ModelsTab
+            }
+        }
+        BottomBarItem(tabNavigator.current, SettingsTab) {
+            if (tabNavigator.current == SettingsTab) {
+                SettingsTab.navigator?.popUntilRoot()
+            } else {
+                tabNavigator.current = SettingsTab
+            }
+        }
     }
 }
 

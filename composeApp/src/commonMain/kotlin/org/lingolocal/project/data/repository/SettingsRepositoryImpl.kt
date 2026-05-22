@@ -4,6 +4,7 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.lingolocal.project.domain.model.AppLanguage
 import org.lingolocal.project.domain.model.ThemeMode
 import org.lingolocal.project.domain.repository.SettingsRepository
 
@@ -27,7 +28,19 @@ class SettingsRepositoryImpl(
     private fun loadThemeMode(): ThemeMode =
         ThemeMode.fromName(settings.getStringOrNull(KEY_THEME_MODE))
 
+    private val _appLanguage = MutableStateFlow(loadAppLanguage())
+    override val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
+    override fun setAppLanguage(language: AppLanguage) {
+        settings.putString(KEY_APP_LANGUAGE, language.code)
+        _appLanguage.value = language
+    }
+
+    private fun loadAppLanguage(): AppLanguage =
+        AppLanguage.fromCode(settings.getStringOrNull(KEY_APP_LANGUAGE))
+
     private companion object {
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_APP_LANGUAGE = "app_language"
     }
 }
